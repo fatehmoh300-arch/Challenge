@@ -55,3 +55,35 @@ export function maximumPointsForRange(start, end, goals = []) {
   }
   return total;
 }
+
+
+/**
+ * Apply deterministic competition ranks to a leaderboard sorted by score.
+ * Equal points share a rank and the next rank skips tied places (1, 1, 3).
+ * Display name and user id order only make the visible list stable; neither
+ * decides who receives a tied award.
+ */
+export function assignCompetitionRanks(entries = []) {
+  const ordered = [...entries].sort((left, right) => {
+    const scoreDifference = Number(right.points || 0) - Number(left.points || 0);
+    if (scoreDifference !== 0) return scoreDifference;
+    const nameOrder = String(left.display_name || "").localeCompare(
+      String(right.display_name || ""),
+      "ar",
+    );
+    if (nameOrder !== 0) return nameOrder;
+    return String(left.user_id || "").localeCompare(String(right.user_id || ""));
+  });
+
+  let previousPoints = null;
+  let previousRank = 0;
+  return ordered.map((entry, index) => {
+    const points = Number(entry.points || 0);
+    const competitionRank = index === 0 || points !== previousPoints
+      ? index + 1
+      : previousRank;
+    previousPoints = points;
+    previousRank = competitionRank;
+    return { ...entry, competition_rank: competitionRank };
+  });
+}
