@@ -2,9 +2,10 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { ArrowRight, CalendarDays, Users, ShieldCheck } from "lucide-react";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { useApp } from "@/components/app-provider";
 
 type ChallengeDetails = {
   id: string; title: string; description: string; category: string; difficulty: string;
@@ -14,6 +15,10 @@ type ChallengeDetails = {
 
 export default function ChallengeDetailsPage() {
   const params = useParams<{ id: string }>();
+  const router = useRouter();
+  const { user, challenge: currentChallenge, refresh } = useApp();
+  const [joining, setJoining] = useState(false);
+  const [joinError, setJoinError] = useState("");
   const [item, setItem] = useState<ChallengeDetails | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
@@ -36,6 +41,29 @@ export default function ChallengeDetailsPage() {
     return () => { active = false; };
   }, [params.id]);
 
+  const join = async () => {
+    if (!user) {
+      router.push(`/login?next=${encodeURIComponent(`/challenges/${params.id}`)}`);
+      return;
+    }
+    if (currentChallenge) {
+      setJoinError("حسابك مرتبط حالياً بمساحة تحدٍّ أخرى. دعم تعدد التحديات في الحساب الواحد ما زال قيد التطوير.");
+      return;
+    }
+    setJoining(true);
+    setJoinError("");
+    try {
+      const { error } = await getSupabaseBrowserClient().rpc("join_public_challenge", { p_challenge_id: item?.id });
+      if (error) throw error;
+      await refresh();
+      router.replace("/dashboard");
+    } catch (e) {
+      setJoinError(e instanceof Error ? e.message : "تعذّر الانضمام إلى التحدّي.");
+    } finally {
+      setJoining(false);
+    }
+  };
+
   if (loading) return <main dir="rtl" style={{ minHeight: "100vh", display: "grid", placeItems: "center", background: "#f5f7fb", color: "#718096" }}>جارٍ تحميل تفاصيل التحدّي…</main>;
   if (notFound || !item) return <main dir="rtl" style={{ minHeight: "100vh", padding: 24, display: "grid", placeItems: "center", background: "#f5f7fb" }}><div style={{ background: "white", padding: 30, borderRadius: 18, textAlign: "center" }}><h1>التحدّي غير متاح</h1><p style={{ color: "#718096" }}>قد يكون خاصاً أو غير منشور أو لم يعد متاحاً.</p><Link href="/explore" style={{ color: "#3157d5" }}>العودة إلى الاستكشاف</Link></div></main>;
 
@@ -53,7 +81,8 @@ export default function ChallengeDetailsPage() {
       <div style={{ background: "#f7f8fc", borderRadius: 14, padding: 17, marginTop: 22, color: "#66738a", lineHeight: 1.8, fontSize: 14 }}>
         {item.join_mode === "open" ? "هذا التحدّي يسمح بالانضمام المفتوح." : item.join_mode === "approval" ? "يتطلب الانضمام موافقة مدير التحدّي." : "الانضمام إلى هذا التحدّي يتطلب دعوة."}
       </div>
-      <Link href={`/login?next=${encodeURIComponent(`/challenges/${item.id}`)}`} style={{ display: "flex", alignItems: "center", justifyContent: "center", marginTop: 24, background: "#3157d5", color: "white", borderRadius: 12, padding: 14, textDecoration: "none", fontWeight: 700 }}>تسجيل الدخول للمتابعة</Link>
+      {item.join_mode === "open" ? <button onClick={join} disabled={joining || Boolean(currentChallenge)} style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", marginTop: 24, background: currentChallenge ? "#9aa5ba" : "#3157d5", color: "white", border: 0, borderRadius: 12, padding: 14, fontWeight: 700, cursor: currentChallenge ? "not-allowed" : "pointer" }}>{joining ? "جارٍ الانضمام…" : user ? "انضم إلى التحدّي" : "سجّل الدخول للانضمام"}</button> : <p style={{ color: "#718096", marginTop: 22, fontSize: 14 }}>الانضمام متاح عبر دعوة من منشئ التحدّي.</p>}
+      {joinError && <p role="alert" style={{ color: "#a33b32", background: "#fff1f0", padding: 12, borderRadius: 10, marginTop: 12 }}>{joinError}</p>}
     </article>
   </main>;
 }
