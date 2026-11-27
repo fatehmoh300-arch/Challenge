@@ -7,7 +7,7 @@ import { Card, LoadingState, Notice, PageTitle, ProgressBar, StatCard } from "@/
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { algeriaDate } from "@/lib/date";
 import { formatArabicDate, number, percent } from "@/lib/format";
-import { isFastingDate, isFullDay, isGoalActiveOnDate, pointsFromCompletions } from "@/lib/scoring.js";
+import { isFullDay, isGoalActiveOnDate, pointsFromCompletions } from "@/lib/scoring.js";
 import type { DailyLog, HabitCompletion, ReadingLog } from "@/lib/types";
 
 function enumerateDates(start: string, end: string) {
