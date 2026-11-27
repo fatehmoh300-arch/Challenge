@@ -188,11 +188,12 @@
 
 ## النشر
 
-- آخر Preview وجدته في حالة READY: https://challenge-gl8y6ol8l-challenge16.vercel.app
-- هذا النشر مبني على commit `935779b874a045f11cb8336ec08a00485a0799ae`، وهو أقدم من رأس فرع الإصلاح الحالي ولا يمثل النسخة الأخيرة من الواجهة.
-- فحص Vercel للـHEAD الحالي أعاد `build-rate-limit` ووجّه إلى ترقية Pro؛ لم تتم الترقية أو محاولة دفع رسوم. لهذا لم أستطع إنشاء Preview جديد من رأس الفرع الحالي.
-- نجاح Production Build في GitHub Actions منفصل عن نجاح نشر Vercel؛ لا نعتبر التطبيق منشوراً على النسخة الحالية ولا مختبراً فعلياً على الهاتف.
-- لم أنفذ عمليات كتابة على Preview القديم؛ إعدادات البيئة قد تكون مرتبطة بقاعدة الإنتاج.
+- يوجد Preview حديث بحالة READY من Vercel: https://challenge-dxxbjp1mv-challenge16.vercel.app
+- alias: https://challenge-git-fix-challenge-scoring-be79b4-challenge16.vercel.app
+- Deployment ID: `dpl_F6gQbhMD8xrshV3oU7AzqxgeWfoQ`.
+- النشر مبني على رأس الفرع `99396c732ef8cad1e26b51a6a5100fdd4bdc6917`، وحالة Vercel على commit كانت Success. شجرة التطبيق في هذا الإصدار تشمل إصلاحات الواجهة واحتساب النقاط المجمدة.
+- بعض المحاولات السابقة واجهت حد `build-rate-limit`، لكن أحدث Preview اكتمل بنجاح دون ترقية أو دفع رسوم.
+- نجاح Preview لا يعادل اختبار متصفح حقيقي أو جهاز Android. لم أجرِ عمليات كتابة على بيانات التحدي في بيئة Preview.
 
 ## التكلفة
 
