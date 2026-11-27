@@ -31,3 +31,14 @@
   .mobile-nav a,.mobile-nav>button{font-size:7px}
   .mobile-more-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
 }
+
+
+.calendar-month-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 0 18px}
+.calendar-month-toolbar strong{font-size:15px}
+.calendar-month-toolbar button{width:34px;height:34px;display:grid;place-items:center;border:1px solid var(--line);border-radius:10px;background:#fff;color:#56708d}
+.calendar-month-toolbar button:disabled{opacity:.35;cursor:not-allowed}
+.calendar-day.outside{background:transparent;border-color:transparent;box-shadow:none}
+.calendar-day.future{background:#fff;border-style:dashed;border-color:#d8e2ec;color:#8090a4}
+.calendar-day.future i,.calendar-legend i.future{background:#a9b7c8}
+.calendar-day.no-goals{background:#f6f7f9;border-color:#e7ebf0;color:#8c99a8}
+@media(max-width:760px){.calendar-month-toolbar{margin-bottom:10px}.calendar-month-toolbar strong{font-size:13px}.calendar-month-toolbar button{width:30px;height:30px}}
