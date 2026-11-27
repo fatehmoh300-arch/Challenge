@@ -6,7 +6,7 @@ import { useApp } from "@/components/app-provider";
 import { Card, LoadingState, PageTitle, ProgressBar, StatCard } from "@/components/ui";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { number } from "@/lib/format";
-import type { MyProgress } from "@/lib/types";
+import type { MyProgress, MyAward } from "@/lib/types";
 
 const levels=[
   {name:"مبتدئ",min:0},
@@ -28,6 +28,7 @@ const catalog=[
 export default function AchievementsPage(){
   const {user}=useApp();
   const [progress,setProgress]=useState<MyProgress|null>(null);
+  const [awards,setAwards]=useState<MyAward[]>([]);
   const [loading,setLoading]=useState(true);
   const [error,setError]=useState("");
   useEffect(()=>{
@@ -35,10 +36,16 @@ export default function AchievementsPage(){
     let live=true;
     const load=async()=>{
       setLoading(true);
-      const {data,error:e}=await getSupabaseBrowserClient().rpc("get_my_progress");
+      const sb=getSupabaseBrowserClient();
+      const [{data,error:e},{data:awardData,error:awardError}]=await Promise.all([
+        sb.rpc("get_my_progress"),
+        sb.rpc("get_my_awards"),
+      ]);
       if(!live)return;
       if(e)setError(e.message);
       else if(data?.[0])setProgress(data[0] as MyProgress);
+      if(awardError)setError(awardError.message);
+      else setAwards((awardData||[]) as MyAward[]);
       setLoading(false);
     };
     void load();return()=>{live=false;};
@@ -86,6 +93,17 @@ export default function AchievementsPage(){
           </div>;
         })}
       </div>
+    </Card>
+    <Card style={{marginTop:15}}>
+      <div className="section-heading"><div><h3>جوائز المراكز الأولى</h3><p>يُمنح ترتيب المراكز الثلاثة الأولى تلقائياً عند إكمال منظّم التحدّي للمسابقة.</p></div><Trophy size={22}/></div>
+      {!awards.length?<p className="muted-line">لم تحصل على جائزة منافسة بعد. تظهر الجائزة بعد إغلاق تحدٍّ كنت مشاركاً فيه وحققت نقاطاً.</p>:
+        <div style={{display:"grid",gap:10}}>
+          {awards.map(award=><div key={award.challenge_id} style={{display:"flex",alignItems:"center",gap:12,border:"1px solid var(--line)",borderRadius:12,padding:13}}>
+            <div className="habit-icon"><Trophy size={20}/></div>
+            <div style={{flex:1}}><strong>{award.challenge_title}</strong><small style={{display:"block",color:"var(--muted)",marginTop:4}}>{award.place===1?"المركز الأول 🥇":award.place===2?"المركز الثاني 🥈":"المركز الثالث 🥉"} · {number(award.points)} نقطة</small></div>
+            <small className="muted-line">{new Date(award.awarded_at).toLocaleDateString("ar-DZ")}</small>
+          </div>)}
+        </div>}
     </Card>
   </div>;
 }
