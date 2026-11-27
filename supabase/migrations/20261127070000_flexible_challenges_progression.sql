@@ -85,7 +85,7 @@ begin
     alter table public.habits add constraint habits_points_range_check check (points between 1 and 100);
   end if;
   if not exists (select 1 from pg_constraint where conrelid='public.habits'::regclass and conname='habits_active_dates_check') then
-    alter table public.habits add constraint habits_active_dates_check check (active_until is null or active_until >= active_from);
+    alter table public.habits add constraint habits_active_dates_check check (active_until is null or active_until >= active_from or not is_active);
   end if;
   if not exists (select 1 from pg_constraint where conrelid='public.habits'::regclass and conname='habits_habit_key_format_check') then
     alter table public.habits add constraint habits_habit_key_format_check check (habit_key ~ '^[a-z][a-z0-9_]{1,63}$');
@@ -397,6 +397,39 @@ revoke all on function public.update_challenge_goal(uuid,uuid,text,text,integer,
 grant execute on function public.update_challenge_goal(uuid,uuid,text,text,integer,boolean,boolean) to authenticated;
 
 -- Role assignment and granular delegation stay on the server.
+-- Pausing, completing or archiving a challenge stops further progress edits.
+create or replace function public.validate_user_day(p_challenge_id uuid,p_user_id uuid,p_log_date date)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $validate$
+declare
+  v_start date;
+  v_end date;
+  v_status text;
+  v_today date;
+begin
+  if (select auth.uid()) is not null and p_user_id<>(select auth.uid()) then
+    raise exception 'لا يمكنك تسجيل بيانات مستخدم آخر';
+  end if;
+  select c.start_date,c.end_date,c.status
+    into v_start,v_end,v_status
+  from public.challenges c where c.id=p_challenge_id;
+  if v_start is null then raise exception 'التحدّي غير موجود'; end if;
+  if v_status not in ('open','active') then
+    raise exception 'التحدّي متوقف عن استقبال تسجيلات جديدة';
+  end if;
+  v_today:=(now() at time zone 'Africa/Algiers')::date;
+  if p_log_date<v_start or p_log_date>v_end then raise exception 'التاريخ خارج فترة التحدّي'; end if;
+  if p_log_date>v_today then raise exception 'لا يمكن تسجيل إنجاز ليوم لم يحدث بعد'; end if;
+  if not exists (
+    select 1 from public.challenge_members cm
+    where cm.challenge_id=p_challenge_id and cm.user_id=p_user_id
+  ) then raise exception 'المستخدم ليس عضواً في هذا التحدّي'; end if;
+end;
+$validate$;
+
 -- Capture the configured point value at the moment a participant completes a goal.
 -- Later edits to goal weights do not rewrite already-earned competition points or XP.
 create or replace function public.validate_completion()
