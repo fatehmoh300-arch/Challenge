@@ -9,13 +9,16 @@ create or replace function public.create_challenge(
   p_end_date date default (((now() at time zone 'Africa/Algiers')::date) + 29)
 )
 returns uuid
-language sql
+language plpgsql
 security definer
 set search_path = ''
 as $legacy$
-  select public.create_challenge_v2(
+begin
+  -- PL/pgSQL resolves this call on execution, after create_challenge_v2 is installed below.
+  return public.create_challenge_v2(
     p_title, '', p_start_date, p_end_date, 'private', 'medium', 'عام', 'invite', 50
   );
+end;
 $legacy$;
 revoke all on function public.create_challenge(text,date,date) from public,anon;
 grant execute on function public.create_challenge(text,date,date) to authenticated;
