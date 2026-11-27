@@ -50,7 +50,7 @@ export default function ChallengesPage() {
   };
 
   return <div>
-    <PageTitle title="تحدياتي" subtitle="أنشئ مساحات مستقلة، وبدّل بينها دون إنشاء حسابات متعددة." action={<Button onClick={()=>setShowForm(v=>!v)}><Plus size={16}/> تحدٍّ جديد</Button>}/>
+    <PageTitle title="تحدياتي" subtitle="أنشئ مساحات مستقلة، وبدّل بينها دون إنشاء حسابات متعددة." action={<div style={{display:"flex",gap:8,flexWrap:"wrap"}}><Link className="btn btn-secondary" href="/explore">استكشاف التحديات</Link><Button onClick={()=>setShowForm(v=>!v)}><Plus size={16}/> تحدٍّ جديد</Button></div>}/>
     {message&&<Notice tone="success">{message}</Notice>}
     {error&&<Notice tone="error">{error}</Notice>}
     <div className="challenge-list" style={{display:"grid",gap:12,marginBottom:22}}>
