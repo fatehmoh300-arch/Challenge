@@ -69,3 +69,13 @@ test("leaderboard SQL counts completion rows separately from awarded points", as
   assert.match(migration, /SUM\(member_day\.day_completions\)::integer AS habits_done/);
   assert.match(migration, /SUM\(member_day\.day_points\)::integer AS points/);
 });
+
+
+test("P1 review indexes the comment foreign key and hardens trigger RPC identity", async () => {
+  const migration = await read("../supabase/migrations/20261127144545_p1_index_and_definer_review.sql");
+  assert.match(migration, /idx_challenge_comments_post_challenge/);
+  assert.match(migration, /sync_challenge_member_count\(\)\s+SET search_path = pg_catalog/i);
+  assert.match(migration, /IF v_uid IS NULL THEN/);
+  assert.match(migration, /p_user_id IS DISTINCT FROM v_uid/);
+  assert.match(migration, /SET search_path = ''/);
+});
