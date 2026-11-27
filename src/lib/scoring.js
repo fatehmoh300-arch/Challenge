@@ -24,8 +24,12 @@ export function maxPointsForDate(value, goals = []) {
 /** Sum the frozen point awards for completion rows using the goal catalogue. */
 export function pointsFromCompletions(completions = [], goals = []) {
   if (!Array.isArray(completions)) return 0;
-  if (!Array.isArray(goals) || goals.length === 0) return completions.length;
-  const byId = new Map(goals.map((goal) => [goal.id, Number(goal.points || 0)]));
+  const byId = new Map(
+    (Array.isArray(goals) ? goals : []).map((goal) => [
+      goal.id,
+      Number(goal.points || 0),
+    ]),
+  );
   return completions.reduce((total, completion) => {
     const points = Number.isFinite(completion.points_awarded)
       ? Number(completion.points_awarded)
