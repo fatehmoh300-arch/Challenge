@@ -21,6 +21,7 @@ export default function ChallengesPage() {
   const router = useRouter();
   const today = algeriaDate();
   const [showForm,setShowForm] = useState(false);
+  const [inviteToken,setInviteToken] = useState("");
   const [title,setTitle] = useState("");
   const [description,setDescription] = useState("");
   const [category,setCategory] = useState("عام");
@@ -33,6 +34,19 @@ export default function ChallengesPage() {
   const [busy,setBusy] = useState(false);
   const [error,setError] = useState("");
   const [message,setMessage] = useState("");
+
+  const joinByInvite=async()=>{
+    setBusy(true);setError("");setMessage("");
+    try{
+      const {data,error:rpcError}=await getSupabaseBrowserClient().rpc("join_challenge",{p_token:inviteToken.trim()});
+      if(rpcError)throw rpcError;
+      await refresh(data as string);
+      setInviteToken("");
+      setMessage("تم الانضمام إلى التحدّي. تم فتح مساحته الآن.");
+      router.push("/dashboard");
+    }catch(e){setError(e instanceof Error?e.message:"تعذّر الانضمام. تحقق من رمز الدعوة وصلاحيته.");}
+    finally{setBusy(false);}
+  };
 
   const create=async()=>{
     setBusy(true);setError("");setMessage("");
@@ -52,6 +66,14 @@ export default function ChallengesPage() {
   return <div>
     <PageTitle title="تحدياتي" subtitle="أنشئ مساحات مستقلة، وبدّل بينها دون إنشاء حسابات متعددة." action={<div style={{display:"flex",gap:8,flexWrap:"wrap"}}><Link className="btn btn-secondary" href="/explore">استكشاف التحديات</Link><Button onClick={()=>setShowForm(v=>!v)}><Plus size={16}/> تحدٍّ جديد</Button></div>}/>
     {message&&<Notice tone="success">{message}</Notice>}
+    <Card style={{marginBottom:14}}>
+      <h3 style={{marginTop:0}}>الانضمام إلى تحدٍّ خاص</h3>
+      <p className="muted-line">أدخل رمز الدعوة الذي أرسله المنظّم. يمكنك الانضمام إلى تحديات إضافية بالحساب نفسه.</p>
+      <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+        <input className="text-input" style={{flex:"1 1 240px"}} value={inviteToken} onChange={e=>setInviteToken(e.target.value)} placeholder="الصق رمز الدعوة"/>
+        <Button onClick={joinByInvite} busy={busy} disabled={!inviteToken.trim()}>انضم بالدعوة</Button>
+      </div>
+    </Card>
     {error&&<Notice tone="error">{error}</Notice>}
     <div className="challenge-list" style={{display:"grid",gap:12,marginBottom:22}}>
       {challenges.length===0?<Card><p>لا توجد تحديات مرتبطة بحسابك بعد.</p></Card>:challenges.map(item=>{
