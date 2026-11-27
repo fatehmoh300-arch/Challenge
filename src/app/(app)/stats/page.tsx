@@ -11,7 +11,7 @@ import { Card, LoadingState, Notice, PageTitle, ProgressBar, StatCard } from "@/
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { algeriaDate } from "@/lib/date";
 import { formatArabicDate, number, percent } from "@/lib/format";
-import { isFastingDate, isFullDay, maxPointsForDate, pointsFromCompletions } from "@/lib/scoring.js";
+import { isFastingDate, isFullDay, isGoalActiveOnDate, maxPointsForDate, pointsFromCompletions } from "@/lib/scoring.js";
 import type { HabitCompletion, MyProgress, ReadingLog } from "@/lib/types";
 import { useLeaderboard } from "@/lib/use-leaderboard";
 
@@ -138,12 +138,7 @@ export default function StatsPage() {
 
     return dates.map((date) => {
       const dayRows = completionsByDate.get(date) || [];
-      const activeGoals = habits.filter((goal) =>
-        goal.is_active &&
-        goal.active_from <= date &&
-        (!goal.active_until || goal.active_until >= date) &&
-        (!goal.is_fasting || isFastingDate(date)),
-      );
+      const activeGoals = habits.filter((goal) => isGoalActiveOnDate(goal, date));
       return {
         date,
         points: pointsFromCompletions(dayRows, habits),
@@ -162,12 +157,7 @@ export default function StatsPage() {
     const opportunities = summaries.reduce((sum, day) => {
       const [year, month, date] = day.date.split("-").map(Number);
       const value = `${year}-${String(month).padStart(2, "0")}-${String(date).padStart(2, "0")}`;
-      const active = habits.filter((goal) =>
-        goal.is_active &&
-        goal.active_from <= value &&
-        (!goal.active_until || goal.active_until >= value) &&
-        (!goal.is_fasting || isFastingDate(value)),
-      );
+      const active = habits.filter((goal) => isGoalActiveOnDate(goal, value));
       return sum + active.length;
     }, 0);
     const completedOpportunities = summaries.reduce((sum, day) => sum + day.completions, 0);
