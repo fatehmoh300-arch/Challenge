@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, CalendarRange, Link2, PlusCircle, Globe2, LockKeyhole } from "lucide-react";
 import { useApp } from "@/components/app-provider";
@@ -30,6 +30,7 @@ export default function SetupPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const router = useRouter();
+  useEffect(() => { if (challenge) router.replace("/challenges"); }, [challenge, router]);
 
   if (challenge) return <LoadingState label="لديك مساحة تحدٍّ بالفعل. افتح صفحة تحدياتي لإضافة مساحة أخرى." />;
   if (!user) return null;
