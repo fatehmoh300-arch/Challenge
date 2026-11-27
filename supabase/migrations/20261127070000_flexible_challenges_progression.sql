@@ -5,8 +5,8 @@
 -- its fixed December dates and pre-seeded habits. New clients use create_challenge_v2.
 create or replace function public.create_challenge(
   p_title text default 'تحدٍّ جديد',
-  p_start_date date default current_date,
-  p_end_date date default (current_date + 29)
+  p_start_date date default ((now() at time zone 'Africa/Algiers')::date),
+  p_end_date date default (((now() at time zone 'Africa/Algiers')::date) + 29)
 )
 returns uuid
 language sql
