@@ -51,16 +51,20 @@ export default function ManagePage(){
     let live=true;
     const load=async()=>{
       setLoading(true);
-      const tasks:Promise<any>[]=[sb.rpc("get_challenge_members",{p_challenge_id:challenge.id})];
-      if(canRequests)tasks.push(sb.rpc("get_challenge_join_requests",{p_challenge_id:challenge.id}));
-      const results=await Promise.all(tasks);
+      const memberQuery=sb.rpc("get_challenge_members",{p_challenge_id:challenge.id});
+      const requestQuery=canRequests
+        ? sb.rpc("get_challenge_join_requests",{p_challenge_id:challenge.id})
+        : Promise.resolve({data:[],error:null});
+      const [memberResult,requestResult]=await Promise.all([memberQuery,requestQuery]);
       if(!live)return;
-      const memberRows=(results[0].data||[]) as MemberRow[];
+      if(memberResult.error)throw memberResult.error;
+      if(requestResult.error)throw requestResult.error;
+      const memberRows=(memberResult.data||[]) as MemberRow[];
       setMembers(memberRows);
       const drafts:Record<string,{role:MemberRow["role"];permissions:string[]}>={};
       memberRows.forEach(m=>drafts[m.user_id]={role:m.role,permissions:m.permissions||[]});
       setMemberDrafts(drafts);
-      setRequests(canRequests?(results[1]?.data||[]) as JoinRequest[]:[]);
+      setRequests(canRequests?(requestResult.data||[]) as JoinRequest[]:[]);
       setLoading(false);
     };
     void load();return()=>{live=false;};
