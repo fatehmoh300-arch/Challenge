@@ -67,7 +67,7 @@ test("leaderboard SQL counts completion rows separately from awarded points", as
   const migration = await read("../supabase/migrations/20261127143339_p0_security_scoring_integrity.sql");
   assert.match(migration, /COUNT\(completion_row\.habit_id\)::integer AS day_completions/);
   assert.match(migration, /SUM\(member_day\.day_completions\)::integer AS habits_done/);
-  assert.match(migration, /SUM\(member_day\.day_points\)::integer AS points/);
+  assert.match(migration, /COALESCE\(SUM\(member_day\.day_points\),\s*0\)::integer AS points/);
 });
 
 
