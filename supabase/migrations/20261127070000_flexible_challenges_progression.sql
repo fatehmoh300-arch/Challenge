@@ -224,7 +224,7 @@ begin
     pg_catalog.btrim(p_title),coalesce(pg_catalog.btrim(p_description), ''),
     coalesce(nullif(pg_catalog.btrim(p_category),''),'عام'),p_difficulty,
     p_visibility,
-    case when p_start_date>v_today then 'open' else 'active' end,
+    case when p_end_date<v_today then 'completed' when p_start_date>v_today then 'open' else 'active' end,
     p_join_mode,p_max_members,(select auth.uid()),p_start_date,p_end_date
   ) returning id into v_id;
 
@@ -294,6 +294,31 @@ $$;
 revoke all on function public.update_challenge_details(uuid,text,text,text,date,date,text,text,text,integer) from public,anon;
 grant execute on function public.update_challenge_details(uuid,text,text,text,date,date,text,text,text,integer) to authenticated;
 
+
+create or replace function public.set_challenge_status(p_challenge_id uuid,p_status text)
+returns void
+language plpgsql security definer
+set search_path = ''
+as $status$
+begin
+  if not public.has_challenge_permission(p_challenge_id,'manage_rules') then
+    raise exception 'لا تملك صلاحية تغيير حالة التحدّي';
+  end if;
+  if p_status not in ('open','active','paused','completed','archived') then
+    raise exception 'حالة التحدّي غير صالحة';
+  end if;
+  if p_status='open' and not exists (
+    select 1 from public.challenges c where c.id=p_challenge_id and c.visibility='public'
+  ) then
+    raise exception 'الحالة المفتوحة مخصصة للتحديات العامة';
+  end if;
+  update public.challenges set status=p_status where id=p_challenge_id;
+  if not found then raise exception 'التحدّي غير موجود'; end if;
+end;
+$status$;
+revoke all on function public.set_challenge_status(uuid,text) from public,anon;
+grant execute on function public.set_challenge_status(uuid,text) to authenticated;
+
 create or replace function public.create_challenge_goal(
   p_challenge_id uuid,p_name text,p_description text,p_points integer,p_is_required boolean
 )
@@ -336,19 +361,36 @@ returns void
 language plpgsql security definer
 set search_path = ''
 as $$
-declare v_today date := (now() at time zone 'Africa/Algiers')::date;
+declare
+  v_today date := (now() at time zone 'Africa/Algiers')::date;
+  v_old_points smallint;
+  v_old_required boolean;
+  v_old_active boolean;
+  v_has_activity boolean;
 begin
   if not public.has_challenge_permission(p_challenge_id,'manage_rules') then raise exception 'لا تملك صلاحية تعديل الأهداف'; end if;
   if p_name is null or char_length(pg_catalog.btrim(p_name)) not between 2 and 80 then raise exception 'اسم الهدف غير صحيح'; end if;
   if coalesce(char_length(p_description),0)>500 or p_points not between 1 and 100 then raise exception 'الوصف أو النقاط غير صحيحة'; end if;
+
+  select points,is_required,is_active into v_old_points,v_old_required,v_old_active
+  from public.habits where id=p_goal_id and challenge_id=p_challenge_id;
+  if not found then raise exception 'الهدف غير موجود في هذا التحدّي'; end if;
+  if not v_old_active and p_is_active then
+    raise exception 'الهدف المؤرشف لا يعاد تفعيله؛ أضف هدفاً جديداً للحفاظ على سجل الإنجازات';
+  end if;
+
+  select exists(select 1 from public.daily_logs where challenge_id=p_challenge_id)
+    into v_has_activity;
+  if v_has_activity and (p_points<>v_old_points or p_is_required is distinct from v_old_required) then
+    raise exception 'بدأ تسجيل الإنجازات؛ لا يمكن تغيير وزن النقاط أو إلزامية هدف قائم. أوقفه وأضف هدفاً جديداً';
+  end if;
+
   update public.habits set
     name=pg_catalog.btrim(p_name),description=coalesce(pg_catalog.btrim(p_description),''),
     points=p_points,is_required=p_is_required,
     is_active=p_is_active,
-    active_from=case when p_is_active and not is_active then greatest(v_today,(select start_date from public.challenges where id=p_challenge_id)) else active_from end,
-    active_until=case when p_is_active then null when is_active then v_today else active_until end
+    active_until=case when not p_is_active and is_active then v_today when p_is_active then null else active_until end
   where id=p_goal_id and challenge_id=p_challenge_id;
-  if not found then raise exception 'الهدف غير موجود في هذا التحدّي'; end if;
 end;
 $$;
 revoke all on function public.update_challenge_goal(uuid,uuid,text,text,integer,boolean,boolean) from public,anon;
@@ -540,7 +582,9 @@ for select to authenticated
 using (user_id=(select auth.uid()) or public.has_challenge_permission(challenge_id,'manage_join_requests'));
 create policy join_requests_insert_own on public.challenge_join_requests
 for insert to authenticated with check (user_id=(select auth.uid()) and exists(
-  select 1 from public.challenges c where c.id=challenge_id and c.visibility='public'
+  select 1 from public.challenges c
+  where c.id=challenge_id and c.visibility='public'
+    and c.join_mode='approval' and c.status in ('open','active')
 ));
 
 alter table public.challenge_posts enable row level security;
@@ -692,7 +736,6 @@ begin
     from public.challenge_members cm
     cross join calendar cal
     left join public.habits h on h.challenge_id=p_challenge_id
-      and h.is_active
       and cal.day_date>=h.active_from
       and (h.active_until is null or cal.day_date<=h.active_until)
       and (not h.is_fasting or extract(isodow from cal.day_date) in (1,4))
