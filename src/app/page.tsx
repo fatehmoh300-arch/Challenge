@@ -4,7 +4,7 @@ import { ArrowLeft, Compass, ShieldCheck, Trophy, Users } from "lucide-react";
 export default function Home() {
   return (
     <main dir="rtl" style={{ minHeight: "100vh", background: "#f5f7fb", color: "#182235", padding: "28px 20px", display: "flex", flexDirection: "column" }}>
-      <header style={{ width: "100%", maxWidth: 1120, margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16 }}>
+      <header style={{ width: "100%", maxWidth: 1120, margin: "0 auto", display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
         <Link href="/" style={{ display: "flex", alignItems: "center", gap: 10, color: "inherit", textDecoration: "none" }}>
           <span style={{ width: 42, height: 42, borderRadius: 14, background: "#3157d5", color: "white", display: "grid", placeItems: "center", fontWeight: 800, fontSize: 22 }}>C</span>
           <span><strong style={{ display: "block", fontSize: 19 }}>تحدّي</strong><small style={{ color: "#718096", letterSpacing: 2 }}>CHALLENGE</small></span>
@@ -15,7 +15,7 @@ export default function Home() {
         </nav>
       </header>
 
-      <section style={{ width: "100%", maxWidth: 1120, margin: "auto", padding: "80px 0 64px", display: "grid", gridTemplateColumns: "minmax(0, 1.25fr) minmax(260px, .75fr)", gap: 42, alignItems: "center" }}>
+      <section style={{ width: "100%", maxWidth: 1120, margin: "auto", padding: "80px 0 64px", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 320px), 1fr))", gap: 42, alignItems: "center" }}>
         <div>
           <span style={{ display: "inline-flex", padding: "8px 13px", background: "#e8edff", color: "#3157d5", borderRadius: 99, fontSize: 13, fontWeight: 700 }}>منصة التحديات والإنجاز المشترك</span>
           <h1 style={{ fontSize: "clamp(36px, 6vw, 64px)", lineHeight: 1.22, letterSpacing: "-1.5px", margin: "22px 0 18px", maxWidth: 680 }}>حوّل أهدافك إلى تحدٍّ. واجعل التقدّم مرئياً.</h1>
