@@ -72,6 +72,19 @@ set points_awarded = h.points
 from public.habits h
 where h.id = hc.habit_id and h.challenge_id = hc.challenge_id;
 
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint
+    where conrelid='public.habit_completions'::regclass
+      and conname='habit_completions_points_awarded_check'
+  ) then
+    alter table public.habit_completions
+      add constraint habit_completions_points_awarded_check
+      check (points_awarded between 1 and 100);
+  end if;
+end $$;
+
 update public.habits h
 set active_from = c.start_date,
     is_required = case when h.is_fasting then false else h.is_required end
@@ -951,7 +964,9 @@ where c.title = 'تحدّي ديسمبر 2026'
   and not exists (select 1 from public.habit_completions h where h.challenge_id=c.id)
   and not exists (select 1 from public.reading_logs r where r.challenge_id=c.id)
   and not exists (select 1 from public.invitations i where i.challenge_id=c.id)
-  and not exists (select 1 from public.challenge_posts p where p.challenge_id=c.id);
+  and not exists (select 1 from public.challenge_posts p where p.challenge_id=c.id)
+  and not exists (select 1 from public.challenge_join_requests r where r.challenge_id=c.id)
+  and not exists (select 1 from public.challenge_awards a where a.challenge_id=c.id);
 
 -- Explicit Data API grants are required for newly-created public tables.
 grant select,insert,delete on public.challenge_posts,public.challenge_comments to authenticated;
