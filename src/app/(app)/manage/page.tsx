@@ -9,16 +9,19 @@ import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 type MemberRow={user_id:string;display_name:string;avatar_url:string|null;role:"owner"|"moderator"|"assistant"|"member";permissions:string[];joined_at:string};
 type JoinRequest={id:string;user_id:string;display_name:string;message:string;status:string;created_at:string};
 type GoalDraft={name:string;description:string;points:number;is_required:boolean;is_active:boolean};
-const permissions=[["manage_members","إدارة المشاركين"],["manage_rules","تعديل القواعد والأهداف"],["manage_join_requests","مراجعة طلبات الانضمام"],["moderate_posts","إدارة المنشورات والتعليقات"],["publish_posts","نشر الإعلانات"]];
+const permissions=[["manage_members","إدارة المشاركين"],["manage_rules","تعديل القواعد والأهداف"],["manage_join_requests","مراجعة طلبات الانضمام"],["moderate_posts","إدارة المنشورات والتعليقات"],["publish_posts","نشر الإعلانات الرسمية"],["complete_challenge","إنهاء التحدّي واعتماد النتائج"],["archive_challenge","أرشفة التحدّي"]];
 const emptyGoal:GoalDraft={name:"",description:"",points:1,is_required:true,is_active:true};
 
 export default function ManagePage(){
   const {user,challenge,membership,habits,refresh}=useApp();
   const sb=getSupabaseBrowserClient();
-  const canRules=membership?.role==="owner"||membership?.permissions.includes("manage_rules");
-  const canMembers=membership?.role==="owner"||membership?.permissions.includes("manage_members");
-  const canAssign=membership?.role==="owner";
-  const canRequests=membership?.role==="owner"||membership?.permissions.includes("manage_join_requests");
+  const isOwner=membership?.role==="owner";
+  const canRules=isOwner||membership?.permissions.includes("manage_rules");
+  const canMembers=isOwner||membership?.permissions.includes("manage_members");
+  const canAssign=isOwner;
+  const canComplete=isOwner||membership?.permissions.includes("complete_challenge");
+  const canArchive=isOwner||membership?.permissions.includes("archive_challenge");
+  const canRequests=isOwner||membership?.permissions.includes("manage_join_requests");
   const [members,setMembers]=useState<MemberRow[]>([]);
   const [requests,setRequests]=useState<JoinRequest[]>([]);
   const [memberDrafts,setMemberDrafts]=useState<Record<string,{role:MemberRow["role"];permissions:string[]}>>({});
@@ -89,10 +92,10 @@ export default function ManagePage(){
     finally{setBusy("");}
   };
 
-  const saveStatus=async()=>{
+  const saveStatus=async(target=status)=>{
     if(!challenge)return;setBusy("status");setError("");setMessage("");
     try{
-      const {error:e}=await sb.rpc("set_challenge_status",{p_challenge_id:challenge.id,p_status:status});
+      const {error:e}=await sb.rpc("set_challenge_status",{p_challenge_id:challenge.id,p_status:target});
       if(e)throw e;await refresh();setMessage("تم تحديث حالة التحدّي.");
     }catch(e){setError(e instanceof Error?e.message:"تعذّر تغيير حالة التحدّي.");}
     finally{setBusy("");}
@@ -175,12 +178,14 @@ export default function ManagePage(){
           <label>الصعوبة<select className="text-input" value={difficulty} onChange={e=>setDifficulty(e.target.value as typeof difficulty)}><option value="easy">مبتدئ</option><option value="medium">متوسط</option><option value="hard">متقدم</option></select></label>
           {visibility==="public"&&<label>طريقة الانضمام<select className="text-input" value={joinMode} onChange={e=>setJoinMode(e.target.value as typeof joinMode)}><option value="open">مفتوح</option><option value="approval">بموافقة</option><option value="invite">بدعوة</option></select></label>}
           <label>السعة<select className="text-input" value={maxMembers} onChange={e=>setMaxMembers(Number(e.target.value))}>{[2,10,25,50,100,250,500].map(n=><option key={n} value={n}>{n} مشارك</option>)}</select></label>
-          <label>حالة التحدّي<select className="text-input" value={status} onChange={e=>setStatus(e.target.value)}><option value="open" disabled={visibility!=="public"}>مفتوح للانضمام</option><option value="active">نشط</option><option value="paused">متوقف مؤقتاً</option><option value="completed">مكتمل</option><option value="archived">مؤرشف</option></select></label>
+          {canAssign&&<label>حالة التحدّي<select className="text-input" value={status} onChange={e=>setStatus(e.target.value)}><option value="open" disabled={visibility!=="public"}>مفتوح للانضمام</option><option value="active">نشط</option><option value="paused">متوقف مؤقتاً</option><option value="completed">مكتمل</option><option value="archived">مؤرشف</option></select></label>}
         </div>
         <label style={{display:"block",marginTop:12}}>الوصف<textarea className="text-input" rows={3} value={description} maxLength={2000} onChange={e=>setDescription(e.target.value)}/></label>
         <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
           <Button onClick={saveChallenge} busy={busy==="challenge"} disabled={!title.trim()||!startDate||!endDate||endDate<startDate}><Save size={16}/> حفظ الإعدادات</Button>
-          <Button variant="secondary" onClick={saveStatus} busy={busy==="status"}>حفظ حالة التحدّي</Button>
+          {canAssign&&<Button variant="secondary" onClick={()=>saveStatus(status)} busy={busy==="status"}>حفظ حالة التحدّي</Button>}
+          {!canAssign&&canComplete&&challenge.status!=="completed"&&<Button variant="secondary" onClick={()=>saveStatus("completed")} busy={busy==="status"}>إنهاء التحدّي واعتماد النتائج</Button>}
+          {!canAssign&&canArchive&&challenge.status!=="archived"&&<Button variant="secondary" onClick={()=>saveStatus("archived")} busy={busy==="status"}>أرشفة التحدّي</Button>}
         </div>
       </>}
     </Card>
@@ -219,9 +224,9 @@ export default function ManagePage(){
         return <div key={m.user_id} style={{borderTop:"1px solid var(--line)",padding:"13px 0",display:"grid",gap:9}}>
           <div style={{display:"flex",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
             <div><strong>{m.display_name}</strong><small style={{display:"block",color:"var(--muted)",fontSize:10}}>{isOwner?"مالك التحدّي":m.user_id===user?.id?"أنت":m.role}</small></div>
-            {!isOwner&&(canMembers||canAssign)&&<Button variant="ghost" onClick={()=>removeMember(m.user_id)} busy={busy===m.user_id}><UserMinus size={14}/> إزالة</Button>}
+            {!isOwner&&(canAssign||(canMembers&&m.role==="member"))&&<Button variant="ghost" onClick={()=>removeMember(m.user_id)} busy={busy===m.user_id}><UserMinus size={14}/> إزالة</Button>}
           </div>
-          {canMembers&&!isOwner&&<>
+          {canAssign&&!isOwner&&<>
             <label>الدور<select className="text-input" value={d.role} onChange={e=>patchMember(m.user_id,{role:e.target.value as MemberRow["role"]})}><option value="member">مشارك</option><option value="assistant">مساعد</option><option value="moderator">مشرف</option></select></label>
             <div className="settings-grid" style={{gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))"}}>
               {permissions.map(([key,label])=><label className="checkbox-label" key={key}><input type="checkbox" checked={d.permissions.includes(key)} onChange={e=>patchMember(m.user_id,{permissions:e.target.checked?[...d.permissions,key]:d.permissions.filter(x=>x!==key)})}/>{label}</label>)}
@@ -230,7 +235,7 @@ export default function ManagePage(){
           </>}
         </div>;
       })}
-      {!canMembers&&<p className="muted-line">عرض الأعضاء متاح، لكن إدارة العضوية تحتاج الصلاحية المخصصة.</p>}{canMembers&&!canAssign&&<p className="muted-line">يمكنك إدارة العضوية وفق صلاحيتك، بينما تعيين الأدوار والصلاحيات يبقى بيد مالك التحدّي.</p>}
+      {!canMembers&&<p className="muted-line">عرض الأعضاء متاح، لكن إزالة المشاركين تحتاج صلاحية إدارة العضوية.</p>}{canMembers&&!canAssign&&<p className="muted-line">يمكنك إزالة الأعضاء العاديين فقط؛ تعيين الأدوار والصلاحيات وإدارة المشرفين يبقيان بيد مالك التحدّي.</p>}
     </Card>
 
     {canRequests&&<Card style={{marginTop:14}}>
