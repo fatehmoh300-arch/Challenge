@@ -17,9 +17,11 @@ test("security-definer functions pin an empty search_path", () => {
     "public.validate_user_day(uuid, uuid, date)",
     "public.get_challenge_leaderboard(uuid)",
   ]) {
-    assert.match(
-      migration,
-      new RegExp(`alter function ${signature.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\\\$&")} set search_path = '';`, "i"),
+    assert.ok(
+      migration.toLowerCase().includes(
+        `alter function ${signature} set search_path = '';`.toLowerCase(),
+      ),
+      `missing empty search_path for ${signature}`,
     );
   }
 });
