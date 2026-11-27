@@ -12,11 +12,11 @@ returns uuid
 language sql
 security definer
 set search_path = ''
-as $
+as $legacy$
   select public.create_challenge_v2(
     p_title, '', p_start_date, p_end_date, 'private', 'medium', 'عام', 'invite', 50
   );
-$;
+$legacy$;
 revoke all on function public.create_challenge(text,date,date) from public,anon;
 grant execute on function public.create_challenge(text,date,date) to authenticated;
 
@@ -361,7 +361,7 @@ create or replace function public.validate_completion()
 returns trigger
 language plpgsql
 set search_path = ''
-as $
+as $completion$
 declare
   v_fasting boolean;
   v_key text;
@@ -387,7 +387,7 @@ begin
   end if;
   return new;
 end;
-$;
+$completion$;
 
 create or replace function public.get_challenge_members(p_challenge_id uuid)
 returns table(user_id uuid,display_name text,avatar_url text,role text,permissions text[],joined_at timestamptz)
