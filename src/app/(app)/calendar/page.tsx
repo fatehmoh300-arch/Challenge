@@ -8,7 +8,7 @@ import { Card, LoadingState, Notice, PageTitle } from "@/components/ui";
 import { algeriaDate } from "@/lib/date";
 import { formatArabicDate, number } from "@/lib/format";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
-import { isFastingDate, isFullDay, maxPointsForDate } from "@/lib/scoring.js";
+import { isFastingDate, isFullDay, isGoalActiveOnDate, maxPointsForDate } from "@/lib/scoring.js";
 import type { HabitCompletion } from "@/lib/types";
 
 type DailyRow = { log_date: string; reviewed_at: string | null };
@@ -141,12 +141,7 @@ export default function CalendarPage() {
             if (!inRange) return <div key={date} className="calendar-day outside"><span>{Number(date.slice(-2))}</span></div>;
 
             const dayCompletions = completionByDate.get(date) || [];
-            const dayGoals = habits.filter((goal) =>
-              goal.is_active &&
-              goal.active_from <= date &&
-              (!goal.active_until || goal.active_until >= date) &&
-              (!goal.is_fasting || isFastingDate(date)),
-            );
+            const dayGoals = habits.filter((goal) => isGoalActiveOnDate(goal, date));
             const requiredCount = dayGoals.filter((goal) => goal.is_required).length;
             const points = dayCompletions.reduce((sum, row) => sum + Number(row.points_awarded || 0), 0);
             const maximum = maxPointsForDate(date, habits);
