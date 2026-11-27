@@ -5,7 +5,7 @@ import { readFile } from "node:fs/promises";
 const read = (path) => readFile(new URL(path, import.meta.url), "utf8");
 
 test("challenge creation no longer seeds a December template or fixed habits", async () => {
-  const migration = await read("../supabase/migrations/20261127070000_flexible_challenges_progression.sql");
+  const migration = await read("../supabase/migrations/20261127105043_flexible_challenges_progression.sql");
   const start = migration.indexOf("create or replace function public.create_challenge_v2(");
   const end = migration.indexOf("\n$$;", start);
   assert.notEqual(start, -1);
@@ -37,7 +37,7 @@ test("progression levels use the approved cumulative XP thresholds", async () =>
 });
 
 test("challenge completion creates top-three awards and locks further changes", async () => {
-  const migration = await read("../supabase/migrations/20261127070000_flexible_challenges_progression.sql");
+  const migration = await read("../supabase/migrations/20261127105043_flexible_challenges_progression.sql");
   assert.match(migration, /create table if not exists public\.challenge_awards/);
   assert.match(migration, /create or replace function public\.set_challenge_status/);
   assert.match(migration, /row_number\(\) over\(order by lb\.points desc/);
@@ -45,8 +45,27 @@ test("challenge completion creates top-three awards and locks further changes", 
 });
 
 test("community data has RLS and member-only policies", async () => {
-  const migration = await read("../supabase/migrations/20261127070000_flexible_challenges_progression.sql");
+  const migration = await read("../supabase/migrations/20261127105043_flexible_challenges_progression.sql");
   assert.match(migration, /alter table public\.challenge_posts enable row level security/);
   assert.match(migration, /alter table public\.challenge_comments enable row level security/);
   assert.match(migration, /public\.is_challenge_member\(challenge_id\)/);
+});
+
+
+test("P0 hardening migration separates lifecycle permissions and secures comments", async () => {
+  const migration = await read("../supabase/migrations/20261127143339_p0_security_scoring_integrity.sql");
+  assert.match(migration, /REVOKE ALL PRIVILEGES ON TABLE public\.challenges FROM authenticated/i);
+  assert.match(migration, /GRANT UPDATE \(reading_book, weekly_reading_goal\)/i);
+  assert.match(migration, /challenge_comments_same_challenge_guard/i);
+  assert.match(migration, /post_row\.challenge_id = challenge_comments\.challenge_id/i);
+  assert.match(migration, /complete_challenge/);
+  assert.match(migration, /archive_challenge/);
+  assert.match(migration, /RANK\(\) OVER \(ORDER BY leaderboard_row\.points DESC\)/);
+});
+
+test("leaderboard SQL counts completion rows separately from awarded points", async () => {
+  const migration = await read("../supabase/migrations/20261127143339_p0_security_scoring_integrity.sql");
+  assert.match(migration, /COUNT\(completion_row\.habit_id\)::integer AS day_completions/);
+  assert.match(migration, /SUM\(member_day\.day_completions\)::integer AS habits_done/);
+  assert.match(migration, /SUM\(member_day\.day_points\)::integer AS points/);
 });
