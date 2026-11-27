@@ -6,6 +6,8 @@ import {
   pointsFromCompletions,
   isFullDay,
   maximumPointsForRange,
+  isGoalActiveOnDate,
+  assignCompetitionRanks,
 } from "../src/lib/scoring.js";
 
 test("fasting eligibility is limited to Monday and Thursday", () => {
@@ -65,4 +67,45 @@ test("maximum range points are based on the configured challenge goals", () => {
     { id: "fast", points: 1, is_active: true, is_required: false, is_fasting: true },
   ];
   assert.equal(maximumPointsForRange("2026-11-30", "2026-12-01", goals), 5);
+});
+
+
+test("deactivated goals retain their historical active window", () => {
+  const goal = {
+    id: "historic",
+    points: 4,
+    is_active: false,
+    is_required: true,
+    active_from: "2026-11-01",
+    active_until: "2026-11-10",
+  };
+  assert.equal(isGoalActiveOnDate(goal, "2026-11-10"), true);
+  assert.equal(isGoalActiveOnDate(goal, "2026-11-11"), false);
+  assert.equal(isGoalActiveOnDate({ ...goal, active_until: null }, "2026-11-05"), false);
+});
+
+test("competition ranks share ties and skip occupied places", () => {
+  const ranked = assignCompetitionRanks([
+    { user_id: "c", display_name: "ج", points: 80 },
+    { user_id: "a", display_name: "أ", points: 100 },
+    { user_id: "b", display_name: "ب", points: 100 },
+    { user_id: "d", display_name: "د", points: 60 },
+  ]);
+  assert.deepEqual(ranked.map((row) => [row.user_id, row.competition_rank]), [
+    ["a", 1],
+    ["b", 1],
+    ["c", 3],
+    ["d", 4],
+  ]);
+});
+
+test("three-way tie at the third place remains a shared third place", () => {
+  const ranked = assignCompetitionRanks([
+    { user_id: "a", display_name: "أ", points: 120 },
+    { user_id: "b", display_name: "ب", points: 100 },
+    { user_id: "c", display_name: "ج", points: 90 },
+    { user_id: "d", display_name: "د", points: 90 },
+    { user_id: "e", display_name: "هـ", points: 90 },
+  ]);
+  assert.deepEqual(ranked.map((row) => row.competition_rank), [1, 2, 3, 3, 3]);
 });
