@@ -17,6 +17,7 @@ export default function ManagePage(){
   const sb=getSupabaseBrowserClient();
   const canRules=membership?.role==="owner"||membership?.permissions.includes("manage_rules");
   const canMembers=membership?.role==="owner"||membership?.permissions.includes("manage_members");
+  const canAssign=membership?.role==="owner";
   const canRequests=membership?.role==="owner"||membership?.permissions.includes("manage_join_requests");
   const [members,setMembers]=useState<MemberRow[]>([]);
   const [requests,setRequests]=useState<JoinRequest[]>([]);
@@ -200,7 +201,7 @@ export default function ManagePage(){
         return <div key={m.user_id} style={{borderTop:"1px solid var(--line)",padding:"13px 0",display:"grid",gap:9}}>
           <div style={{display:"flex",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
             <div><strong>{m.display_name}</strong><small style={{display:"block",color:"var(--muted)",fontSize:10}}>{isOwner?"مالك التحدّي":m.user_id===user?.id?"أنت":m.role}</small></div>
-            {!isOwner&&canMembers&&<Button variant="ghost" onClick={()=>removeMember(m.user_id)} busy={busy===m.user_id}><UserMinus size={14}/> إزالة</Button>}
+            {!isOwner&&(canMembers||canAssign)&&<Button variant="ghost" onClick={()=>removeMember(m.user_id)} busy={busy===m.user_id}><UserMinus size={14}/> إزالة</Button>}
           </div>
           {canMembers&&!isOwner&&<>
             <label>الدور<select className="text-input" value={d.role} onChange={e=>patchMember(m.user_id,{role:e.target.value as MemberRow["role"]})}><option value="member">مشارك</option><option value="assistant">مساعد</option><option value="moderator">مشرف</option></select></label>
@@ -211,7 +212,7 @@ export default function ManagePage(){
           </>}
         </div>;
       })}
-      {!canMembers&&<p className="muted-line">عرض الأعضاء متاح، لكن تعديل أدوارهم يحتاج صلاحية إدارة المشاركين.</p>}
+      {!canMembers&&<p className="muted-line">عرض الأعضاء متاح، لكن إدارة العضوية تحتاج الصلاحية المخصصة.</p>}{canMembers&&!canAssign&&<p className="muted-line">يمكنك إدارة العضوية وفق صلاحيتك، بينما تعيين الأدوار والصلاحيات يبقى بيد مالك التحدّي.</p>}
     </Card>
 
     {canRequests&&<Card style={{marginTop:14}}>
