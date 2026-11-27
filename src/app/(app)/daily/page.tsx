@@ -29,8 +29,8 @@ function DailyPageContent() {
   const [loading,setLoading] = useState(true);
   const eligible = Boolean(challenge && isWithin(date,challenge.start_date,challenge.end_date) && date<=today);
   const fastingToday = isFastingDay(date);
-  const visibleHabits = habits.filter(h=>h.is_active && h.active_from<=date && (!h.active_until || h.active_until>=date) && (!h.is_fasting || fastingToday));
-  const score = visibleHabits.reduce((sum,h)=>sum+(completions.some(x=>x.habit_id===h.id)?h.points:0),0);
+  const visibleHabits = habits.filter(h=>h.active_from<=date && (!h.active_until || h.active_until>=date) && (!h.is_fasting || fastingToday));
+  const score = visibleHabits.reduce((sum,h)=>{const completion=completions.find(x=>x.habit_id===h.id);return sum+(completion?Number(completion.points_awarded??h.points):0);},0);
   const maxPoints = visibleHabits.reduce((sum,h)=>sum+h.points,0);
   const requiredCount = visibleHabits.filter(h=>h.is_required).length;
   const requiredDone = visibleHabits.filter(h=>h.is_required && completions.some(x=>x.habit_id===h.id)).length;
@@ -43,7 +43,7 @@ function DailyPageContent() {
       setLoading(true);setError("");
       const sb=getSupabaseBrowserClient();
       const [{data:c},{data:l},{data:r}]=await Promise.all([
-        sb.from("habit_completions").select("habit_id,quantity,log_date").eq("challenge_id",challenge.id).eq("user_id",user.id).eq("log_date",date),
+        sb.from("habit_completions").select("habit_id,quantity,log_date,points_awarded").eq("challenge_id",challenge.id).eq("user_id",user.id).eq("log_date",date),
         sb.from("daily_logs").select("log_date,reviewed_at").eq("challenge_id",challenge.id).eq("user_id",user.id).eq("log_date",date).maybeSingle(),
         sb.from("reading_logs").select("log_date,pages_read,book_title").eq("challenge_id",challenge.id).eq("user_id",user.id).eq("log_date",date).maybeSingle(),
       ]);
@@ -54,7 +54,7 @@ function DailyPageContent() {
     void load();return()=>{live=false;};
   },[user,challenge,date,eligible]);
 
-  const toggle = async (habitId:string, habitKey:string) => {
+  const toggle = async (habitId:string, habitKey:string, points:number) => {
     if(!user||!challenge||!eligible)return;
     setBusyId(habitId);setError("");setMessage("");
     try{
@@ -69,7 +69,7 @@ function DailyPageContent() {
         if(logError)throw logError;
         const {error:e}=await sb.from("habit_completions").insert({challenge_id:challenge.id,user_id:user.id,habit_id:habitId,log_date:date,quantity:habitKey==="chess"?chessGames:1});
         if(e)throw e;
-        setCompletions(prev=>[...prev,{habit_id:habitId,quantity:habitKey==="chess"?chessGames:1,log_date:date}]);
+        setCompletions(prev=>[...prev,{habit_id:habitId,quantity:habitKey==="chess"?chessGames:1,points_awarded:points,log_date:date}]);
         setDayLog(prev=>prev||{log_date:date,reviewed_at:null});
       }
       setMessage("تم حفظ التغيير.");
@@ -104,7 +104,7 @@ function DailyPageContent() {
     <div className="daily-toolbar"><label>تاريخ المتابعة<input type="date" className="text-input date-input" value={date} max={today} min={challenge?.start_date} onChange={e=>setDate(e.target.value)}/></label><div className="daily-score"><span>نقاط اليوم</span><strong>{number(score)} <small>/ {number(maxPoints)}</small></strong></div></div>
     {!eligible ? <Notice tone="warning">لا يمكن التسجيل في هذا التاريخ. اختر يوماً ضمن فترة التحدّي، على ألا يكون في المستقبل.</Notice> : <>
       <Card className="daily-progress-card"><div><span>تقدّم اليوم</span><strong>{number(score)} من {number(maxPoints)} نقاط</strong></div><ProgressBar value={maxPoints>0?score/maxPoints*100:0}/><small>{maxPoints===0?"لم تُضف أهداف لهذا التاريخ بعد.":requiredCount>0&&requiredDone===requiredCount?"اكتملت جميع الأهداف الإلزامية لهذا اليوم.":"تُحتسب النقاط حسب وزن كل هدف."}</small></Card>
-      {visibleHabits.length===0&&<Notice tone="warning">لا توجد أهداف مفعّلة لهذا التاريخ. يمكن لمنظّم التحدّي إضافتها من صفحة إدارة التحدّي.</Notice>}<div className="habit-grid">{visibleHabits.map(h=>{const checked=completions.some(c=>c.habit_id===h.id);return <Card className={`habit-card ${checked?"completed":""}`} key={h.id}><div className="habit-card-top"><div className={`habit-icon ${checked?"done":""}`}>{icons[h.habit_key]||<Check/>}</div><span className={`status-chip ${checked?"done":"pending"}`}>{checked?"تم الإنجاز":"بانتظار التسجيل"}</span></div><h3>{h.name}</h3><p>{h.description}</p><small className="muted-line">{number(h.points)} نقاط · {h.is_required?"إلزامي":"اختياري"}</small>{h.habit_key==="chess"&&!checked&&<label className="mini-field">عدد المباريات<select value={chessGames} onChange={e=>setChessGames(Number(e.target.value))}><option value={1}>مباراة واحدة</option><option value={2}>مباراتان</option></select></label>}<Button variant={checked?"secondary":"primary"} busy={busyId===h.id} className="full-width" onClick={()=>toggle(h.id,h.habit_key)}>{checked?"إلغاء التسجيل":"تسجيل الإنجاز"}{checked?<CheckCircle2 size={16}/>:<Check size={16}/>}</Button></Card>})}</div>
+      {visibleHabits.length===0&&<Notice tone="warning">لا توجد أهداف مفعّلة لهذا التاريخ. يمكن لمنظّم التحدّي إضافتها من صفحة إدارة التحدّي.</Notice>}<div className="habit-grid">{visibleHabits.map(h=>{const checked=completions.some(c=>c.habit_id===h.id);return <Card className={`habit-card ${checked?"completed":""}`} key={h.id}><div className="habit-card-top"><div className={`habit-icon ${checked?"done":""}`}>{icons[h.habit_key]||<Check/>}</div><span className={`status-chip ${checked?"done":"pending"}`}>{checked?"تم الإنجاز":"بانتظار التسجيل"}</span></div><h3>{h.name}</h3><p>{h.description}</p><small className="muted-line">{number(h.points)} نقاط · {h.is_required?"إلزامي":"اختياري"}</small>{h.habit_key==="chess"&&!checked&&<label className="mini-field">عدد المباريات<select value={chessGames} onChange={e=>setChessGames(Number(e.target.value))}><option value={1}>مباراة واحدة</option><option value={2}>مباراتان</option></select></label>}<Button variant={checked?"secondary":"primary"} busy={busyId===h.id} className="full-width" onClick={()=>toggle(h.id,h.habit_key,h.points)}>{checked?"إلغاء التسجيل":"تسجيل الإنجاز"}{checked?<CheckCircle2 size={16}/>:<Check size={16}/>}</Button></Card>})}</div>
       {fastingToday&&<div className="fasting-note"><CheckCircle2 size={17}/><span>اليوم مخصّص للصيام (الاثنين أو الخميس). تسجيله يمنح نقطة إضافية.</span></div>}
       <Card className="reading-entry"><div className="reading-header"><div className="habit-icon"><BookOpen/></div><div><h3>سجل القراءة</h3><p>تسجيل عدد الصفحات مستقل عن إنجاز عادة القراءة أعلاه.</p></div></div><form onSubmit={saveReading} className="reading-form"><label>عدد الصفحات المقروءة<input className="text-input" type="number" min="0" max="2000" step="1" value={pages} onChange={e=>setPages(e.target.value)}/></label><Button type="submit" busy={savingReading}><Save size={16}/> حفظ الصفحات</Button></form><small className="muted-line">الكتاب الحالي: {challenge?.reading_book||"لم يُحدّد بعد"} · المسجّل لهذا اليوم: {number(reading?.pages_read||0)} صفحة</small></Card>
       <div className="day-finish"><div><strong>{dayLog?.reviewed_at?"تمت مراجعة هذا اليوم":"هل انتهيت من تسجيل إنجازاتك؟"}</strong><span>{dayLog?.reviewed_at?"تم إغلاق السجل ويمكنك تعديل العادات أو القراءة ضمن قيود التاريخ.":"إنهاء اليوم يميّز اليوم الذي راجعته عن الأيام التي لم تسجّل بياناتها."}</span></div><Button variant="secondary" onClick={reviewDay} busy={savingReading} disabled={Boolean(dayLog?.reviewed_at)}>إنهاء اليوم</Button></div>
