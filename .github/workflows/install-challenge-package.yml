@@ -4,7 +4,7 @@ on:
     branches:
       - feature/challenge-platform-v1
     paths:
-      - challenge-platform.zip
+      - 'challenge-platform*.zip'
 permissions:
   contents: write
 jobs:
@@ -17,11 +17,12 @@ jobs:
           persist-credentials: true
       - name: Extract application package
         run: |
-          test -f challenge-platform.zip
-          unzip -q challenge-platform.zip
+          archive="$(find . -maxdepth 1 -type f -name 'challenge-platform*.zip' -print -quit)"
+          test -n "$archive"
+          unzip -q "$archive"
           test -d challenge-platform
           cp -R challenge-platform/. .
-          rm -rf challenge-platform challenge-platform.zip
+          rm -rf challenge-platform "$archive"
       - name: Commit application files
         run: |
           git config user.name "github-actions[bot]"
