@@ -21,21 +21,13 @@ export function maxPointsForDate(value, goals = []) {
     .reduce((total, goal) => total + Number(goal.points || 0), 0);
 }
 
-/** Sum the frozen point awards for completion rows using the goal catalogue. */
-export function pointsFromCompletions(completions = [], goals = []) {
+/** Sum only the frozen points stored on each completion record. */
+export function pointsFromCompletions(completions = []) {
   if (!Array.isArray(completions)) return 0;
-  const byId = new Map(
-    (Array.isArray(goals) ? goals : []).map((goal) => [
-      goal.id,
-      Number(goal.points || 0),
-    ]),
+  return completions.reduce(
+    (total, completion) => total + Number(completion.points_awarded ?? 0),
+    0,
   );
-  return completions.reduce((total, completion) => {
-    const points = Number.isFinite(completion.points_awarded)
-      ? Number(completion.points_awarded)
-      : byId.get(completion.habit_id) || 0;
-    return total + points;
-  }, 0);
 }
 
 /** A full day requires every configured required goal active on that date. */
