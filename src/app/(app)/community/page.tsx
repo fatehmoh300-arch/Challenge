@@ -9,26 +9,28 @@ import { initials } from "@/lib/format";
 
 type ProfileRow={id:string;display_name:string;avatar_url:string|null};
 type CommentRow={id:string;post_id:string;challenge_id:string;author_id:string;content:string;created_at:string;author_name?:string};
-type PostRow={id:string;challenge_id:string;author_id:string;content:string;created_at:string;author_name?:string;comments:CommentRow[]};
+type PostRow={id:string;challenge_id:string;author_id:string;content:string;created_at:string;is_announcement:boolean;author_name?:string;comments:CommentRow[]};
 
 export default function CommunityPage(){
   const {user,challenge,membership}=useApp();
   const sb=getSupabaseBrowserClient();
   const [posts,setPosts]=useState<PostRow[]>([]);
   const [content,setContent]=useState("");
+  const [isAnnouncement,setIsAnnouncement]=useState(false);
   const [commentDrafts,setCommentDrafts]=useState<Record<string,string>>({});
   const [loading,setLoading]=useState(true);
   const [busy,setBusy]=useState(false);
   const [error,setError]=useState("");
   const [message,setMessage]=useState("");
   const canModerate=membership?.role==="owner"||membership?.permissions.includes("moderate_posts");
+  const canPublishAnnouncement=membership?.role==="owner"||membership?.permissions.includes("publish_posts");
 
   const load=useCallback(async()=>{
     if(!challenge)return;
     setLoading(true);setError("");
     try{
       const {data:postData,error:postError}=await sb.from("challenge_posts")
-        .select("id,challenge_id,author_id,content,created_at")
+        .select("id,challenge_id,author_id,content,created_at,is_announcement")
         .eq("challenge_id",challenge.id).order("created_at",{ascending:false}).limit(100);
       if(postError)throw postError;
       const rawPosts=(postData||[]) as Omit<PostRow,"comments"|"author_name">[];
@@ -58,7 +60,7 @@ export default function CommunityPage(){
   const publish=async()=>{
     if(!user||!challenge||!content.trim())return;
     setBusy(true);setError("");setMessage("");
-    try{const {error:e}=await sb.from("challenge_posts").insert({challenge_id:challenge.id,author_id:user.id,content:content.trim()});if(e)throw e;setContent("");await load();setMessage("تم نشر رسالتك.");}
+    try{const {error:e}=await sb.from("challenge_posts").insert({challenge_id:challenge.id,author_id:user.id,content:content.trim(),is_announcement:canPublishAnnouncement&&isAnnouncement});if(e)throw e;setContent("");setIsAnnouncement(false);await load();setMessage("تم نشر رسالتك.");}
     catch(e){setError(e instanceof Error?e.message:"تعذّر نشر الرسالة.");}
     finally{setBusy(false);}
   };
@@ -84,14 +86,17 @@ export default function CommunityPage(){
     {message&&<Notice tone="success">{message}</Notice>}{error&&<Notice tone="error">{error}</Notice>}
     <Card>
       <label>اكتب مشاركة أو تحديثاً للمشاركين<textarea className="text-input" rows={3} maxLength={3000} value={content} onChange={e=>setContent(e.target.value)} placeholder="شارك إنجازاً أو فكرة أو سؤالاً…"/></label>
-      <div style={{display:"flex",justifyContent:"flex-end",marginTop:10}}><Button onClick={publish} busy={busy} disabled={!content.trim()}><Send size={15}/> نشر</Button></div>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,flexWrap:"wrap",marginTop:10}}>
+        {canPublishAnnouncement?<label className="checkbox-label"><input type="checkbox" checked={isAnnouncement} onChange={e=>setIsAnnouncement(e.target.checked)}/> نشر كإعلان رسمي</label>:<small className="muted-line">يمكنك نشر مشاركة عادية. الإعلانات الرسمية للمفوّضين فقط.</small>}
+        <Button onClick={publish} busy={busy} disabled={!content.trim()}><Send size={15}/> نشر</Button>
+      </div>
     </Card>
     {loading?<LoadingState label="جارٍ تحميل المنشورات…"/>:!posts.length?<EmptyState title="لا توجد مشاركات بعد" text="ابدأ بنشر أول تحديث لأعضاء التحدّي."/>:
       <div style={{display:"grid",gap:13,marginTop:14}}>
         {posts.map(post=><Card key={post.id}>
           <div style={{display:"flex",alignItems:"center",gap:10}}>
             <div className="avatar">{initials(post.author_name)}</div>
-            <div style={{flex:1}}><strong>{post.author_name}</strong><small style={{display:"block",color:"var(--muted)",fontSize:10}}>{new Date(post.created_at).toLocaleString("ar-DZ")}</small></div>
+            <div style={{flex:1}}><strong>{post.author_name}</strong>{post.is_announcement&&<span className="status-chip done" style={{marginInlineStart:8}}>إعلان رسمي</span>}<small style={{display:"block",color:"var(--muted)",fontSize:10}}>{new Date(post.created_at).toLocaleString("ar-DZ")}</small></div>
             {(post.author_id===user?.id||canModerate)&&<button className="logout-button" aria-label="حذف المنشور" onClick={()=>void removePost(post.id)}><Trash2 size={15}/></button>}
           </div>
           <p style={{whiteSpace:"pre-wrap",lineHeight:1.9,fontSize:13,margin:"14px 0"}}>{post.content}</p>
