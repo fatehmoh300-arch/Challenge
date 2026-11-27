@@ -4,8 +4,10 @@ export function isFastingDate(value) {
   return day === 1 || day === 4;
 }
 
-function isGoalActiveOnDate(goal, value) {
-  if (goal.is_active === false) return false;
+export function isGoalActiveOnDate(goal, value) {
+  // is_active describes the current/future state. A deactivated goal with an
+  // active_until date remains part of historical calculations before that date.
+  if (goal.is_active === false && !goal.active_until) return false;
   if (goal.active_from && value < goal.active_from) return false;
   if (goal.active_until && value > goal.active_until) return false;
   if (goal.is_fasting && !isFastingDate(value)) return false;
@@ -19,17 +21,13 @@ export function maxPointsForDate(value, goals = []) {
     .reduce((total, goal) => total + Number(goal.points || 0), 0);
 }
 
-/** Sum the frozen point awards for completion rows using the goal catalogue. */
-export function pointsFromCompletions(completions = [], goals = []) {
+/** Sum only the frozen points stored on each completion record. */
+export function pointsFromCompletions(completions = []) {
   if (!Array.isArray(completions)) return 0;
-  if (!Array.isArray(goals) || goals.length === 0) return completions.length;
-  const byId = new Map(goals.map((goal) => [goal.id, Number(goal.points || 0)]));
-  return completions.reduce((total, completion) => {
-    const points = Number.isFinite(completion.points_awarded)
-      ? Number(completion.points_awarded)
-      : byId.get(completion.habit_id) || 0;
-    return total + points;
-  }, 0);
+  return completions.reduce(
+    (total, completion) => total + Number(completion.points_awarded ?? 0),
+    0,
+  );
 }
 
 /** A full day requires every configured required goal active on that date. */
@@ -52,4 +50,36 @@ export function maximumPointsForRange(start, end, goals = []) {
     cursor.setUTCDate(cursor.getUTCDate() + 1);
   }
   return total;
+}
+
+
+/**
+ * Apply deterministic competition ranks to a leaderboard sorted by score.
+ * Equal points share a rank and the next rank skips tied places (1, 1, 3).
+ * Display name and user id order only make the visible list stable; neither
+ * decides who receives a tied award.
+ */
+export function assignCompetitionRanks(entries = []) {
+  const ordered = [...entries].sort((left, right) => {
+    const scoreDifference = Number(right.points || 0) - Number(left.points || 0);
+    if (scoreDifference !== 0) return scoreDifference;
+    const nameOrder = String(left.display_name || "").localeCompare(
+      String(right.display_name || ""),
+      "ar",
+    );
+    if (nameOrder !== 0) return nameOrder;
+    return String(left.user_id || "").localeCompare(String(right.user_id || ""));
+  });
+
+  let previousPoints = null;
+  let previousRank = 0;
+  return ordered.map((entry, index) => {
+    const points = Number(entry.points || 0);
+    const competitionRank = index === 0 || points !== previousPoints
+      ? index + 1
+      : previousRank;
+    previousPoints = points;
+    previousRank = competitionRank;
+    return { ...entry, competition_rank: competitionRank };
+  });
 }

@@ -71,6 +71,7 @@ export type LeaderboardEntry = {
   points: number;
   possible_points: number;
   adherence_pct: number;
+  competition_rank: number;
   full_days: number;
   habits_done: number;
   pages_read: number;

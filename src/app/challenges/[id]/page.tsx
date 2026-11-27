@@ -23,6 +23,7 @@ export default function ChallengeDetailsPage() {
   const [item, setItem] = useState<ChallengeDetails | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
+  const [loadError, setLoadError] = useState("");
 
   useEffect(() => {
     let active = true;
@@ -34,7 +35,8 @@ export default function ChallengeDetailsPage() {
         .eq("visibility", "public")
         .maybeSingle();
       if (!active) return;
-      if (error || !data) setNotFound(true);
+      if (error) setLoadError("تعذّر تحميل تفاصيل التحدّي. تحقق من الاتصال ثم أعد المحاولة.");
+      else if (!data) setNotFound(true);
       else setItem(data as ChallengeDetails);
       setLoading(false);
     };
@@ -43,6 +45,14 @@ export default function ChallengeDetailsPage() {
   }, [params.id]);
 
   const join = async () => {
+    if (!item || !["open","active"].includes(item.status)) {
+      setJoinError("هذا التحدّي متوقف أو مكتمل ولا يستقبل مشاركين حالياً.");
+      return;
+    }
+    if (item.member_count >= item.max_members) {
+      setJoinError("اكتمل العدد المسموح للمشاركين في هذا التحدّي.");
+      return;
+    }
     if (!user) {
       router.push(`/login?next=${encodeURIComponent(`/challenges/${params.id}`)}`);
       return;
@@ -72,6 +82,7 @@ export default function ChallengeDetailsPage() {
   };
 
   if (loading) return <main dir="rtl" style={{ minHeight: "100vh", display: "grid", placeItems: "center", background: "#f5f7fb", color: "#718096" }}>جارٍ تحميل تفاصيل التحدّي…</main>;
+  if (loadError) return <main dir="rtl" style={{ minHeight: "100vh", padding: 24, display: "grid", placeItems: "center", background: "#f5f7fb" }}><div role="alert" style={{ background: "white", padding: 30, borderRadius: 18, textAlign: "center" }}><h1>تعذّر تحميل التحدّي</h1><p style={{ color: "#718096" }}>{loadError}</p><button onClick={() => window.location.reload()} style={{border:0,borderRadius:9,padding:"10px 16px",background:"#3157d5",color:"white"}}>إعادة المحاولة</button></div></main>;
   if (notFound || !item) return <main dir="rtl" style={{ minHeight: "100vh", padding: 24, display: "grid", placeItems: "center", background: "#f5f7fb" }}><div style={{ background: "white", padding: 30, borderRadius: 18, textAlign: "center" }}><h1>التحدّي غير متاح</h1><p style={{ color: "#718096" }}>قد يكون خاصاً أو غير منشور أو لم يعد متاحاً.</p><Link href="/explore" style={{ color: "#3157d5" }}>العودة إلى الاستكشاف</Link></div></main>;
 
   return <main dir="rtl" style={{ minHeight: "100vh", background: "#f5f7fb", color: "#182235", padding: "24px 20px 60px" }}>
@@ -86,9 +97,10 @@ export default function ChallengeDetailsPage() {
         <span style={{ display: "inline-flex", alignItems: "center", gap: 7 }}><ShieldCheck size={17}/>تحدٍّ عام</span>
       </div>
       <div style={{ background: "#f7f8fc", borderRadius: 14, padding: 17, marginTop: 22, color: "#66738a", lineHeight: 1.8, fontSize: 14 }}>
-        {item.join_mode === "open" ? "هذا التحدّي يسمح بالانضمام المفتوح." : item.join_mode === "approval" ? "يتطلب الانضمام موافقة مدير التحدّي." : "الانضمام إلى هذا التحدّي يتطلب دعوة."}
+        {item.status === "paused" ? "التحدّي متوقف مؤقتاً ولا يقبل مشاركين حالياً." : item.status === "completed" ? "انتهى هذا التحدّي وأُغلقت المشاركة." : item.member_count >= item.max_members ? "اكتمل العدد الأقصى للمشاركين." : item.join_mode === "open" ? "هذا التحدّي يسمح بالانضمام الفوري." : item.join_mode === "approval" ? "يتطلب الانضمام موافقة مدير التحدّي." : "الانضمام إلى هذا التحدّي يتطلب دعوة."}
       </div>
-      {item.join_mode !== "invite" ? <button onClick={join} disabled={joining} style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", marginTop: 24, background: "#3157d5", color: "white", border: 0, borderRadius: 12, padding: 14, fontWeight: 700, cursor: "pointer" }}>{joining ? "جارٍ إرسال الطلب…" : !user ? "سجّل الدخول للانضمام" : item.join_mode === "approval" ? "طلب الانضمام" : "انضم إلى التحدّي"}</button> : <p style={{ color: "#718096", marginTop: 22, fontSize: 14 }}>الانضمام متاح عبر دعوة من منشئ التحدّي.</p>}
+      {item.join_mode !== "invite" && <button onClick={join} disabled={joining || !["open","active"].includes(item.status) || item.member_count >= item.max_members} style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", marginTop: 24, background: "#3157d5", color: "white", border: 0, borderRadius: 12, padding: 14, fontWeight: 700, cursor: "pointer", opacity: joining || !["open","active"].includes(item.status) || item.member_count >= item.max_members ? 0.55 : 1 }}>{joining ? "جارٍ إرسال الطلب…" : !["open","active"].includes(item.status) ? "المشاركة مغلقة" : item.member_count >= item.max_members ? "اكتمل العدد" : !user ? "سجّل الدخول للانضمام" : item.join_mode === "approval" ? "طلب الانضمام" : "انضم إلى التحدّي"}</button>}
+      {item.join_mode === "invite" && <p style={{ color: "#718096", marginTop: 22, fontSize: 14 }}>الانضمام متاح عبر دعوة من منشئ التحدّي.</p>}
       {joinMessage && <p role="status" style={{ color: "#246b45", background: "#eaf7ef", padding: 12, borderRadius: 10, marginTop: 12 }}>{joinMessage}</p>}
       {joinError && <p role="alert" style={{ color: "#a33b32", background: "#fff1f0", padding: 12, borderRadius: 10, marginTop: 12 }}>{joinError}</p>}
     </article>
