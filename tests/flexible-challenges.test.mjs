@@ -66,7 +66,7 @@ test("P0 hardening migration separates lifecycle permissions and secures comment
 test("leaderboard SQL counts completion rows separately from awarded points", async () => {
   const migration = await read("../supabase/migrations/20261127143339_p0_security_scoring_integrity.sql");
   assert.match(migration, /COUNT\(completion_row\.habit_id\)::integer AS day_completions/);
-  assert.match(migration, /SUM\(member_day\.day_completions\)::integer AS habits_done/);
+  assert.match(migration, /COALESCE\(SUM\(member_day\.day_completions\),\s*0\)::integer AS habits_done/);
   assert.match(migration, /COALESCE\(SUM\(member_day\.day_points\),\s*0\)::integer AS points/);
 });
 
