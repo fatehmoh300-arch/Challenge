@@ -47,8 +47,8 @@ test("earned points use the point award frozen on each completion", () => {
     { id: "read", points: 10 },
     { id: "walk", points: 1 },
   ];
-  assert.equal(pointsFromCompletions(completions, goals), 5);
-  assert.equal(pointsFromCompletions([], goals), 0);
+  assert.equal(pointsFromCompletions(completions), 5);
+  assert.equal(pointsFromCompletions([]), 0);
 });
 
 test("a full day requires all required goals but not optional fasting", () => {
@@ -116,4 +116,12 @@ test("point totals never fall back to completion row counts without goal definit
     { habit_id: "a", points_awarded: 7 },
     { habit_id: "b", points_awarded: 0 },
   ], []), 7);
+});
+
+
+test("missing frozen award contributes zero and never reads mutable goal points", () => {
+  assert.equal(pointsFromCompletions([
+    { habit_id: "old-goal", points_awarded: null },
+    { habit_id: "unknown-goal" },
+  ]), 0);
 });
