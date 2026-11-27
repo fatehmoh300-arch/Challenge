@@ -493,6 +493,52 @@ $$;
 revoke all on function public.remove_challenge_member(uuid,uuid) from public,anon;
 grant execute on function public.remove_challenge_member(uuid,uuid) to authenticated;
 
+-- Invitation joins also enforce lifecycle status and the challenge-wide capacity.
+create or replace function public.join_challenge(p_token text)
+returns uuid
+language plpgsql
+security definer
+set search_path = ''
+as $invite$
+declare
+  v_challenge_id uuid;
+  v_status text;
+  v_member_count integer;
+  v_max_members integer;
+  v_hash text;
+begin
+  if (select auth.uid()) is null then raise exception 'سجّل الدخول أولاً'; end if;
+  if p_token is null or pg_catalog.char_length(p_token)<24 then raise exception 'رمز الدعوة غير صالح'; end if;
+
+  v_hash:=pg_catalog.encode(extensions.digest(p_token,'sha256'),'hex');
+  select i.challenge_id into v_challenge_id
+  from public.invitations i
+  where i.token_hash=v_hash and i.expires_at>pg_catalog.now() and i.uses<i.max_uses
+  for update;
+  if v_challenge_id is null then raise exception 'رابط الدعوة غير صالح أو منتهي أو استُخدم مسبقاً'; end if;
+
+  select c.status,c.member_count,c.max_members
+    into v_status,v_member_count,v_max_members
+  from public.challenges c where c.id=v_challenge_id
+  for update;
+  if not found then raise exception 'التحدّي غير موجود'; end if;
+  if v_status not in ('open','active') then raise exception 'التحدّي لا يستقبل مشاركين حالياً'; end if;
+  if exists (
+    select 1 from public.challenge_members cm
+    where cm.challenge_id=v_challenge_id and cm.user_id=(select auth.uid())
+  ) then return v_challenge_id; end if;
+  if v_member_count>=v_max_members then raise exception 'اكتمل العدد المسموح للمشاركين'; end if;
+
+  update public.invitations set uses=uses+1 where token_hash=v_hash;
+  insert into public.challenge_members(challenge_id,user_id,role)
+  values(v_challenge_id,(select auth.uid()),'member');
+
+  return v_challenge_id;
+end;
+$invite$;
+revoke all on function public.join_challenge(text) from public,anon;
+grant execute on function public.join_challenge(text) to authenticated;
+
 -- Public challenges may be open, approval-based, or invite-only.
 create or replace function public.request_join_challenge(p_challenge_id uuid,p_message text default '')
 returns uuid
