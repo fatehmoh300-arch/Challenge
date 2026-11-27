@@ -50,6 +50,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <header className="topbar"><div><span className="eyebrow">المساحة النشطة</span><strong>{challenge.title}</strong></div><div className="topbar-right">{challenges.length > 1 && <select aria-label="تبديل التحدّي" value={challenge.id} onChange={e=>void selectChallenge(e.target.value)} className="text-input" style={{maxWidth:210,padding:"7px 9px",fontSize:11}}>{challenges.map(item=><option key={item.id} value={item.id}>{item.title}</option>)}</select>}<span className="live-dot">متصل</span><div className="avatar small">{initials(profile?.display_name)}</div></div></header>
       <div className="content-wrap">{children}<footer className="app-footer"><span>خطوات صغيرة، أثر كبير.</span><span>توقيت الجزائر · Africa/Algiers</span></footer></div>
     </main>
-    <nav className="mobile-nav">{nav.filter(x=>["/dashboard","/daily","/challenges","/competition","/achievements"].includes(x.href)).map(({ href, label, icon: Icon }) => <Link key={href} href={href} className={pathname === href ? "active" : ""}><Icon size={19} /><span>{label}</span></Link>)}</nav>
+    <nav className="mobile-nav" aria-label="التنقل الرئيسي">{nav.map(({ href, label, icon: Icon }) => <Link key={href} href={href} className={pathname === href ? "active" : ""}><Icon size={19} /><span>{label}</span></Link>)}</nav>
   </div>;
 }
