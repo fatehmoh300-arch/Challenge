@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Award, BarChart3, BookOpen, CheckCircle2, Flame, Target, TrendingUp } from "lucide-react";
+import { Award, BarChart3, BookOpen, CalendarDays, CheckCircle2, Flame, Target, TrendingUp } from "lucide-react";
 import {
   Bar, BarChart, CartesianGrid, Line, LineChart, ResponsiveContainer,
   Tooltip, XAxis, YAxis,
@@ -187,7 +187,7 @@ export default function StatsPage() {
     }
     let currentStreak = 0;
     let cursor = summaries.length - 1;
-    if (cursor >= 0 && summaries[cursor].date === today && !summaries[cursor].full) cursor -= 1;
+    if (cursor >= 0 && summaries[cursor].date === today && summaries[cursor].requiredGoals > 0 && !summaries[cursor].full) cursor -= 1;
     for (; cursor >= 0; cursor -= 1) {
       const day = summaries[cursor];
       if (day.requiredGoals > 0 && day.full) currentStreak += 1;
@@ -265,7 +265,7 @@ export default function StatsPage() {
       <StatCard label="مجموع النقاط" value={number(metrics.points)} hint="النقاط المجمدة للإنجازات" icon={<Award/>} tone="blue"/>
       <StatCard label="عدد الإنجازات" value={number(completions.length)} hint="سجلات إنجاز فعلية" icon={<CheckCircle2/>} tone="green"/>
       <StatCard label="إكمال الأهداف" value={percent(metrics.completionRate)} hint={`${number(metrics.completedOpportunities)} من ${number(metrics.opportunities)} فرصة هدف`} icon={<Target/>} tone="amber"/>
-      <StatCard label="الأيام المكتملة" value={number(metrics.completedDays)} hint={`${number(metrics.incompleteDays)} يوم غير مكتمل`} icon={<CalendarDaysIcon/>} tone="slate"/>
+      <StatCard label="الأيام المكتملة" value={number(metrics.completedDays)} hint={`${number(metrics.incompleteDays)} يوم غير مكتمل`} icon={<CalendarDays/>} tone="slate"/>
       <StatCard label="السلسلة الحالية" value={`${number(metrics.currentStreak)} يوم`} hint="الأيام الإلزامية المتتالية" icon={<Flame/>} tone="amber"/>
       <StatCard label="أطول سلسلة" value={`${number(metrics.longestStreak)} يوم`} hint="أفضل تسلسل مكتمل" icon={<TrendingUp/>} tone="green"/>
     </div>
@@ -313,6 +313,3 @@ export default function StatsPage() {
   </div>;
 }
 
-function CalendarDaysIcon() {
-  return <span aria-hidden="true">▦</span>;
-}
