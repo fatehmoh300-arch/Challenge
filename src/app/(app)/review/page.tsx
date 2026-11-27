@@ -169,7 +169,7 @@ export default function ReviewPage() {
     });
 
     const bestDay = dayRows.reduce<DayReport | null>(
-      (best, day) => !best || day.points > best.points ? day : best,
+      (best, day) => day.points > 0 && (!best || day.points > best.points) ? day : best,
       null,
     );
     const firstSevenEnd = addDays(challenge.start_date, 6);
