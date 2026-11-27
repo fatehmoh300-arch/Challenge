@@ -8,7 +8,7 @@ import { Card, LoadingState, Notice, PageTitle } from "@/components/ui";
 import { algeriaDate } from "@/lib/date";
 import { formatArabicDate, number } from "@/lib/format";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
-import { isFastingDate, isFullDay, isGoalActiveOnDate, maxPointsForDate } from "@/lib/scoring.js";
+import { isFullDay, isGoalActiveOnDate, maxPointsForDate } from "@/lib/scoring.js";
 import type { HabitCompletion } from "@/lib/types";
 
 type DailyRow = { log_date: string; reviewed_at: string | null };
