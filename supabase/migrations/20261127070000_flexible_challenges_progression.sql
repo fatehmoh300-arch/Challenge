@@ -46,7 +46,8 @@ alter table public.habits
   add column if not exists active_until date;
 
 update public.habits h
-set active_from = c.start_date
+set active_from = c.start_date,
+    is_required = case when h.is_fasting then false else h.is_required end
 from public.challenges c
 where h.challenge_id = c.id and h.active_from is null;
 
@@ -479,7 +480,10 @@ for insert to authenticated with check (author_id=(select auth.uid()) and public
 create policy challenge_posts_author_or_moderator_update on public.challenge_posts
 for update to authenticated
 using (author_id=(select auth.uid()) or public.has_challenge_permission(challenge_id,'moderate_posts'))
-with check (author_id=(select auth.uid()) or public.has_challenge_permission(challenge_id,'moderate_posts'));
+with check (
+  (author_id=(select auth.uid()) or public.has_challenge_permission(challenge_id,'moderate_posts'))
+  and public.is_challenge_member(challenge_id)
+);
 create policy challenge_posts_author_or_moderator_delete on public.challenge_posts
 for delete to authenticated using (author_id=(select auth.uid()) or public.has_challenge_permission(challenge_id,'moderate_posts'));
 
@@ -496,7 +500,10 @@ for insert to authenticated with check (
 create policy challenge_comments_author_or_moderator_update on public.challenge_comments
 for update to authenticated
 using (author_id=(select auth.uid()) or public.has_challenge_permission(challenge_id,'moderate_posts'))
-with check (author_id=(select auth.uid()) or public.has_challenge_permission(challenge_id,'moderate_posts'));
+with check (
+  (author_id=(select auth.uid()) or public.has_challenge_permission(challenge_id,'moderate_posts'))
+  and public.is_challenge_member(challenge_id)
+);
 create policy challenge_comments_author_or_moderator_delete on public.challenge_comments
 for delete to authenticated using (author_id=(select auth.uid()) or public.has_challenge_permission(challenge_id,'moderate_posts'));
 
@@ -667,6 +674,19 @@ end;
 $$;
 revoke all on function public.get_challenge_leaderboard(uuid) from public;
 grant execute on function public.get_challenge_leaderboard(uuid) to authenticated;
+
+
+-- Remove the unused December starter challenge requested for this rollout.
+-- It is deleted only when it still has no recorded activity or invitation links.
+delete from public.challenges c
+where c.title = 'تحدّي ديسمبر 2026'
+  and c.start_date = date '2026-12-01'
+  and c.end_date = date '2026-12-31'
+  and not exists (select 1 from public.daily_logs d where d.challenge_id=c.id)
+  and not exists (select 1 from public.habit_completions h where h.challenge_id=c.id)
+  and not exists (select 1 from public.reading_logs r where r.challenge_id=c.id)
+  and not exists (select 1 from public.invitations i where i.challenge_id=c.id)
+  and not exists (select 1 from public.challenge_posts p where p.challenge_id=c.id);
 
 -- Explicit Data API grants are required for newly-created public tables.
 grant select,insert,update,delete on public.challenge_posts,public.challenge_comments to authenticated;
