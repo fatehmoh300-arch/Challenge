@@ -328,9 +328,15 @@ begin
   ) then
     raise exception 'الحالة المفتوحة مخصصة للتحديات العامة';
   end if;
+  if v_old_status='completed' and p_status not in ('completed','archived') then
+    raise exception 'تم إكمال التحدّي واعتماد نتيجته؛ لا يمكن إعادة فتحه';
+  end if;
+  if v_old_status='archived' and p_status<>'archived' then
+    raise exception 'التحدّي المؤرشف لا يمكن إعادة تنشيطه';
+  end if;
   if exists(select 1 from public.challenge_awards a where a.challenge_id=p_challenge_id)
-    and p_status<>'completed' then
-    raise exception 'تم اعتماد جوائز التحدّي؛ لا يمكن إعادة فتحه أو تغيير حالته';
+    and p_status in ('open','active','paused') then
+    raise exception 'تم اعتماد جوائز التحدّي؛ لا يمكن إعادة فتحه';
   end if;
   update public.challenges set status=p_status where id=p_challenge_id;
   if p_status='completed' and v_old_status<>'completed' then
