@@ -7,9 +7,10 @@ import { Button, Card, Notice, PageTitle, LoadingState, EmptyState } from "@/com
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { initials } from "@/lib/format";
 
-type ProfileRow={id:string;display_name:string;avatar_url:string|null};
 type CommentRow={id:string;post_id:string;challenge_id:string;author_id:string;content:string;created_at:string;author_name?:string};
 type PostRow={id:string;challenge_id:string;author_id:string;content:string;created_at:string;is_announcement:boolean;author_name?:string;comments:CommentRow[]};
+const PAGE_SIZE=25;
+const COMMENT_BATCH_LIMIT=500;
 
 export default function CommunityPage(){
   const {user,challenge,membership}=useApp();
@@ -18,20 +19,26 @@ export default function CommunityPage(){
   const [content,setContent]=useState("");
   const [isAnnouncement,setIsAnnouncement]=useState(false);
   const [commentDrafts,setCommentDrafts]=useState<Record<string,string>>({});
+  const [page,setPage]=useState(0);
+  const [hasMore,setHasMore]=useState(false);
   const [loading,setLoading]=useState(true);
+  const [loadingMore,setLoadingMore]=useState(false);
   const [busy,setBusy]=useState(false);
   const [error,setError]=useState("");
   const [message,setMessage]=useState("");
   const canModerate=membership?.role==="owner"||membership?.permissions.includes("moderate_posts");
   const canPublishAnnouncement=membership?.role==="owner"||membership?.permissions.includes("publish_posts");
 
-  const load=useCallback(async()=>{
+  const load=useCallback(async(targetPage=0,append=false)=>{
     if(!challenge)return;
-    setLoading(true);setError("");
+    if(append)setLoadingMore(true);else setLoading(true);
+    setError("");
     try{
       const {data:postData,error:postError}=await sb.from("challenge_posts")
         .select("id,challenge_id,author_id,content,created_at,is_announcement")
-        .eq("challenge_id",challenge.id).order("created_at",{ascending:false}).limit(100);
+        .eq("challenge_id",challenge.id)
+        .order("created_at",{ascending:false})
+        .range(targetPage*PAGE_SIZE,targetPage*PAGE_SIZE+PAGE_SIZE-1);
       if(postError)throw postError;
       const rawPosts=(postData||[]) as Omit<PostRow,"comments"|"author_name">[];
       const ids=rawPosts.map(p=>p.id);
@@ -39,46 +46,81 @@ export default function CommunityPage(){
       if(ids.length){
         const {data:commentData,error:commentError}=await sb.from("challenge_comments")
           .select("id,post_id,challenge_id,author_id,content,created_at")
-          .in("post_id",ids).order("created_at",{ascending:true});
+          .in("post_id",ids)
+          .order("created_at",{ascending:true})
+          .limit(COMMENT_BATCH_LIMIT);
         if(commentError)throw commentError;
         comments=(commentData||[]) as CommentRow[];
       }
       const userIds=[...new Set([...rawPosts.map(p=>p.author_id),...comments.map(c=>c.author_id)])];
       let profileMap=new Map<string,string>();
       if(userIds.length){
-        const {data:profileData,error:profileError}=await sb.from("profiles").select("id,display_name").in("id",userIds);
+        const {data:profileData,error:profileError}=await sb.from("profiles")
+          .select("id,display_name").in("id",userIds);
         if(profileError)throw profileError;
         profileMap=new Map((profileData||[]).map((p:{id:string;display_name:string})=>[p.id,p.display_name]));
       }
-      setPosts(rawPosts.map(p=>({...p,author_name:profileMap.get(p.author_id)||"مشارك",comments:comments.filter(c=>c.post_id===p.id).map(c=>({...c,author_name:profileMap.get(c.author_id)||"مشارك"}))})));
-    }catch(e){setError(e instanceof Error?e.message:"تعذّر تحميل مساحة المجتمع.");}
-    finally{setLoading(false);}
+      const nextPosts=rawPosts.map(p=>({
+        ...p,
+        author_name:profileMap.get(p.author_id)||"مشارك",
+        comments:comments.filter(c=>c.post_id===p.id).map(c=>({...c,author_name:profileMap.get(c.author_id)||"مشارك"})),
+      }));
+      setPosts(previous=>append?[...previous,...nextPosts]:nextPosts);
+      setPage(targetPage);
+      setHasMore(rawPosts.length===PAGE_SIZE);
+    }catch(cause){
+      setError(cause instanceof Error?cause.message:"تعذّر تحميل مساحة المجتمع.");
+    }finally{
+      setLoading(false);
+      setLoadingMore(false);
+    }
   },[challenge?.id]);
 
-  useEffect(()=>{void load();},[load]);
+  useEffect(()=>{void load(0,false);},[load]);
 
   const publish=async()=>{
     if(!user||!challenge||!content.trim())return;
     setBusy(true);setError("");setMessage("");
-    try{const {error:e}=await sb.from("challenge_posts").insert({challenge_id:challenge.id,author_id:user.id,content:content.trim(),is_announcement:canPublishAnnouncement&&isAnnouncement});if(e)throw e;setContent("");setIsAnnouncement(false);await load();setMessage("تم نشر رسالتك.");}
-    catch(e){setError(e instanceof Error?e.message:"تعذّر نشر الرسالة.");}
+    try{
+      const {error:e}=await sb.from("challenge_posts").insert({
+        challenge_id:challenge.id,
+        author_id:user.id,
+        content:content.trim(),
+        is_announcement:canPublishAnnouncement&&isAnnouncement,
+      });
+      if(e)throw e;
+      setContent("");setIsAnnouncement(false);
+      await load(0,false);
+      setMessage("تم نشر رسالتك.");
+    }catch(cause){setError(cause instanceof Error?cause.message:"تعذّر نشر الرسالة.");}
     finally{setBusy(false);}
   };
+
   const comment=async(postId:string)=>{
-    if(!user||!challenge)return;const text=commentDrafts[postId]?.trim();if(!text)return;
+    if(!user||!challenge)return;
+    const text=commentDrafts[postId]?.trim();
+    if(!text)return;
     setBusy(true);setError("");setMessage("");
-    try{const {error:e}=await sb.from("challenge_comments").insert({post_id:postId,challenge_id:challenge.id,author_id:user.id,content:text});if(e)throw e;setCommentDrafts(v=>({...v,[postId]:""}));await load();}
-    catch(e){setError(e instanceof Error?e.message:"تعذّر إضافة التعليق.");}
+    try{
+      const {error:e}=await sb.from("challenge_comments").insert({
+        post_id:postId,challenge_id:challenge.id,author_id:user.id,content:text,
+      });
+      if(e)throw e;
+      setCommentDrafts(v=>({...v,[postId]:""}));
+      await load(0,false);
+    }catch(cause){setError(cause instanceof Error?cause.message:"تعذّر إضافة التعليق.");}
     finally{setBusy(false);}
   };
+
   const removePost=async(id:string)=>{
     if(!window.confirm("حذف هذا المنشور؟"))return;
     const {error:e}=await sb.from("challenge_posts").delete().eq("id",id);
-    if(e)setError(e.message);else{await load();setMessage("تم حذف المنشور.");}
+    if(e)setError(e.message);
+    else{await load(0,false);setMessage("تم حذف المنشور.");}
   };
   const removeComment=async(id:string)=>{
     const {error:e}=await sb.from("challenge_comments").delete().eq("id",id);
-    if(e)setError(e.message);else await load();
+    if(e)setError(e.message);else await load(0,false);
   };
 
   return <div>
@@ -106,12 +148,14 @@ export default function CommunityPage(){
               <div style={{flex:1,background:"#f5f7fa",borderRadius:10,padding:"8px 10px"}}><strong style={{fontSize:11}}>{c.author_name}</strong><p style={{fontSize:11,lineHeight:1.7,margin:"3px 0 0",whiteSpace:"pre-wrap"}}>{c.content}</p></div>
               {(c.author_id===user?.id||canModerate)&&<button className="logout-button" aria-label="حذف التعليق" onClick={()=>void removeComment(c.id)}><Trash2 size={13}/></button>}
             </div>)}
+            {post.comments.length===COMMENT_BATCH_LIMIT&&<small className="muted-line">عُرضت أحدث {COMMENT_BATCH_LIMIT} تعليقات في دفعة المنشورات الحالية.</small>}
             <div style={{display:"flex",gap:8,marginTop:8}}>
               <input className="text-input" value={commentDrafts[post.id]||""} onChange={e=>setCommentDrafts(v=>({...v,[post.id]:e.target.value}))} maxLength={1200} placeholder="أضف تعليقاً…"/>
               <Button variant="secondary" onClick={()=>void comment(post.id)} busy={busy} disabled={!(commentDrafts[post.id]||"").trim()}><MessageCircle size={15}/></Button>
             </div>
           </div>
         </Card>)}
+        {hasMore&&<Button variant="secondary" onClick={()=>void load(page+1,true)} busy={loadingMore}>تحميل منشورات أقدم</Button>}
       </div>}
   </div>;
 }
