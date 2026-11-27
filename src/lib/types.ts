@@ -49,6 +49,7 @@ export type ChallengeHabit = {
 export type HabitCompletion = {
   habit_id: string;
   quantity: number;
+  points_awarded: number;
   log_date: string;
 };
 
