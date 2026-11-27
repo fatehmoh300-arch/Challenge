@@ -7,6 +7,14 @@ export type Profile = {
 export type Challenge = {
   id: string;
   title: string;
+  description: string;
+  category: string;
+  difficulty: "easy" | "medium" | "hard";
+  visibility: "public" | "private";
+  status: string;
+  join_mode: "open" | "approval" | "invite";
+  max_members: number;
+  member_count: number;
   start_date: string;
   end_date: string;
   timezone: string;
@@ -15,14 +23,27 @@ export type Challenge = {
   owner_user_id: string;
 };
 
+export type ChallengeMembership = {
+  challenge_id: string;
+  user_id: string;
+  role: "owner" | "moderator" | "assistant" | "member";
+  permissions: string[];
+  created_at: string;
+};
+
 export type ChallengeHabit = {
   id: string;
   challenge_id: string;
-  habit_key: "fajr" | "exercise" | "chess" | "project" | "reading" | "fasting";
+  habit_key: string;
   name: string;
   description: string;
   sort_order: number;
   is_fasting: boolean;
+  points: number;
+  is_required: boolean;
+  is_active: boolean;
+  active_from: string;
+  active_until: string | null;
 };
 
 export type HabitCompletion = {
@@ -53,4 +74,30 @@ export type LeaderboardEntry = {
   habits_done: number;
   pages_read: number;
   best_streak: number;
+};
+
+export type MyProgress = {
+  xp: number;
+  completed_tasks: number;
+  active_days: number;
+  pages_read: number;
+  best_streak: number;
+  achievements: { key: string; earned_at: string }[];
+};
+
+export type ChallengePost = {
+  id: string;
+  challenge_id: string;
+  author_id: string;
+  content: string;
+  created_at: string;
+};
+
+export type ChallengeComment = {
+  id: string;
+  post_id: string;
+  challenge_id: string;
+  author_id: string;
+  content: string;
+  created_at: string;
 };
