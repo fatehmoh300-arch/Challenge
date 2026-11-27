@@ -8,6 +8,8 @@ import { Button, Card, Notice, PageTitle, ProgressBar } from "@/components/ui";
 import { algeriaDate, isFastingDay, isWithin } from "@/lib/date";
 import { formatArabicDate, number } from "@/lib/format";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { isGoalActiveOnDate } from "@/lib/scoring.js";
+import { refreshLeaderboard } from "@/lib/use-leaderboard";
 import type { DailyLog, HabitCompletion, ReadingLog } from "@/lib/types";
 
 const icons: Record<string, React.ReactNode> = { fajr:<Sunrise/>, exercise:<Footprints/>, chess:<Trophy/>, project:<Activity/>, reading:<BookOpen/>, fasting:<CheckCircle2/> };
@@ -29,7 +31,7 @@ function DailyPageContent() {
   const [loading,setLoading] = useState(true);
   const eligible = Boolean(challenge && isWithin(date,challenge.start_date,challenge.end_date) && date<=today);
   const fastingToday = isFastingDay(date);
-  const visibleHabits = habits.filter(h=>h.active_from<=date && (!h.active_until || h.active_until>=date) && (!h.is_fasting || fastingToday));
+  const visibleHabits = habits.filter(h=>isGoalActiveOnDate(h,date));
   const score = visibleHabits.reduce((sum,h)=>{const completion=completions.find(x=>x.habit_id===h.id);return sum+(completion?Number(completion.points_awarded??h.points):0);},0);
   const maxPoints = visibleHabits.reduce((sum,h)=>sum+h.points,0);
   const requiredCount = visibleHabits.filter(h=>h.is_required).length;
@@ -42,17 +44,28 @@ function DailyPageContent() {
     const load=async()=>{
       setLoading(true);setError("");
       const sb=getSupabaseBrowserClient();
-      const [{data:c},{data:l},{data:r}]=await Promise.all([
+      const [completionResult,logResult,readingResult]=await Promise.all([
         sb.from("habit_completions").select("habit_id,quantity,log_date,points_awarded").eq("challenge_id",challenge.id).eq("user_id",user.id).eq("log_date",date),
         sb.from("daily_logs").select("log_date,reviewed_at").eq("challenge_id",challenge.id).eq("user_id",user.id).eq("log_date",date).maybeSingle(),
         sb.from("reading_logs").select("log_date,pages_read,book_title").eq("challenge_id",challenge.id).eq("user_id",user.id).eq("log_date",date).maybeSingle(),
       ]);
       if(!live)return;
-      setCompletions((c||[]) as HabitCompletion[]);setDayLog(l as DailyLog|null);setReading(r as ReadingLog|null);setPages(String(r?.pages_read??0));
+      if(completionResult.error)throw completionResult.error;
+      if(logResult.error)throw logResult.error;
+      if(readingResult.error)throw readingResult.error;
+      setCompletions((completionResult.data||[]) as HabitCompletion[]);
+      setDayLog(logResult.data as DailyLog|null);
+      setReading(readingResult.data as ReadingLog|null);
+      setPages(String(readingResult.data?.pages_read??0));
       setLoading(false);
     };
-    void load();return()=>{live=false;};
-  },[user,challenge,date,eligible]);
+    void load().catch((cause)=>{
+      if(!live)return;
+      setError(cause instanceof Error?cause.message:"تعذّر تحميل سجلات هذا اليوم.");
+      setLoading(false);
+    });
+    return()=>{live=false;};
+  },[user?.id,challenge?.id,date,eligible]);
 
   const toggle = async (habitId:string, habitKey:string, points:number) => {
     if(!user||!challenge||!eligible)return;
@@ -72,6 +85,7 @@ function DailyPageContent() {
         setCompletions(prev=>[...prev,{habit_id:habitId,quantity:habitKey==="chess"?chessGames:1,points_awarded:points,log_date:date}]);
         setDayLog(prev=>prev||{log_date:date,reviewed_at:null});
       }
+      void refreshLeaderboard(challenge.id);
       setMessage("تم حفظ التغيير.");
     }catch(e){setError(e instanceof Error?e.message:"تعذّر حفظ الإنجاز.");}
     finally{setBusyId("");}
