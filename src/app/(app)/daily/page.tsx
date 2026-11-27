@@ -30,6 +30,7 @@ function DailyPageContent() {
   const [error,setError] = useState("");
   const [loading,setLoading] = useState(true);
   const eligible = Boolean(challenge && isWithin(date,challenge.start_date,challenge.end_date) && date<=today);
+  const canEdit = Boolean(eligible && challenge && (challenge.status==="open" || challenge.status==="active"));
   const fastingToday = isFastingDay(date);
   const visibleHabits = habits.filter(h=>isGoalActiveOnDate(h,date));
   const score = visibleHabits.reduce((sum,h)=>{const completion=completions.find(x=>x.habit_id===h.id);return sum+(completion?Number(completion.points_awarded??h.points):0);},0);
@@ -68,7 +69,7 @@ function DailyPageContent() {
   },[user?.id,challenge?.id,date,eligible]);
 
   const toggle = async (habitId:string, habitKey:string, points:number) => {
-    if(!user||!challenge||!eligible)return;
+    if(!user||!challenge||!canEdit)return;
     setBusyId(habitId);setError("");setMessage("");
     try{
       const sb=getSupabaseBrowserClient();
@@ -92,7 +93,7 @@ function DailyPageContent() {
   };
 
   const saveReading=async(e:React.FormEvent)=>{
-    e.preventDefault();if(!user||!challenge||!eligible)return;
+    e.preventDefault();if(!user||!challenge||!canEdit)return;
     const count=Number(pages);if(!Number.isInteger(count)||count<0||count>2000){setError("أدخل عدداً صحيحاً بين 0 و2000 صفحة.");return;}
     setSavingReading(true);setError("");setMessage("");
     try{
@@ -116,12 +117,13 @@ function DailyPageContent() {
   const pageDateLabel=useMemo(()=>formatArabicDate(date,{weekday:"long",day:"numeric",month:"long",year:"numeric"}),[date]);
   return <><PageTitle title="الإنجاز اليومي" subtitle="سجّل ما أنجزته فعلياً، ويمكنك التراجع عن أي تسجيل بالضغط عليه مرة أخرى." action={<span className="date-pill"><Clock3 size={15}/>{pageDateLabel}</span>}/>
     <div className="daily-toolbar"><label>تاريخ المتابعة<input type="date" className="text-input date-input" value={date} max={today} min={challenge?.start_date} onChange={e=>setDate(e.target.value)}/></label><div className="daily-score"><span>نقاط اليوم</span><strong>{number(score)} <small>/ {number(maxPoints)}</small></strong></div></div>
-    {!eligible ? <Notice tone="warning">لا يمكن التسجيل في هذا التاريخ. اختر يوماً ضمن فترة التحدّي، على ألا يكون في المستقبل.</Notice> : <>
+    {!eligible ? <Notice tone="warning">لا يمكن عرض التسجيل لهذا التاريخ. اختر يوماً ضمن فترة التحدّي، على ألا يكون في المستقبل.</Notice> : <>
+      {!canEdit&&<Notice tone="warning">التحدّي متوقف أو مكتمل؛ يمكنك مراجعة سجلاتك السابقة، لكن لا يمكن تعديلها الآن.</Notice>}
       <Card className="daily-progress-card"><div><span>تقدّم اليوم</span><strong>{number(score)} من {number(maxPoints)} نقاط</strong></div><ProgressBar value={maxPoints>0?score/maxPoints*100:0}/><small>{maxPoints===0?"لم تُضف أهداف لهذا التاريخ بعد.":requiredCount>0&&requiredDone===requiredCount?"اكتملت جميع الأهداف الإلزامية لهذا اليوم.":"تُحتسب النقاط حسب وزن كل هدف."}</small></Card>
-      {visibleHabits.length===0&&<Notice tone="warning">لا توجد أهداف مفعّلة لهذا التاريخ. يمكن لمنظّم التحدّي إضافتها من صفحة إدارة التحدّي.</Notice>}<div className="habit-grid">{visibleHabits.map(h=>{const checked=completions.some(c=>c.habit_id===h.id);return <Card className={`habit-card ${checked?"completed":""}`} key={h.id}><div className="habit-card-top"><div className={`habit-icon ${checked?"done":""}`}>{icons[h.habit_key]||<Check/>}</div><span className={`status-chip ${checked?"done":"pending"}`}>{checked?"تم الإنجاز":"بانتظار التسجيل"}</span></div><h3>{h.name}</h3><p>{h.description}</p><small className="muted-line">{number(h.points)} نقاط · {h.is_required?"إلزامي":"اختياري"}</small>{h.habit_key==="chess"&&!checked&&<label className="mini-field">عدد المباريات<select value={chessGames} onChange={e=>setChessGames(Number(e.target.value))}><option value={1}>مباراة واحدة</option><option value={2}>مباراتان</option></select></label>}<Button variant={checked?"secondary":"primary"} busy={busyId===h.id} className="full-width" onClick={()=>toggle(h.id,h.habit_key,h.points)}>{checked?"إلغاء التسجيل":"تسجيل الإنجاز"}{checked?<CheckCircle2 size={16}/>:<Check size={16}/>}</Button></Card>})}</div>
-      {fastingToday&&<div className="fasting-note"><CheckCircle2 size={17}/><span>اليوم مخصّص للصيام (الاثنين أو الخميس). تسجيله يمنح نقطة إضافية.</span></div>}
-      <Card className="reading-entry"><div className="reading-header"><div className="habit-icon"><BookOpen/></div><div><h3>سجل القراءة</h3><p>تسجيل عدد الصفحات مستقل عن إنجاز عادة القراءة أعلاه.</p></div></div><form onSubmit={saveReading} className="reading-form"><label>عدد الصفحات المقروءة<input className="text-input" type="number" min="0" max="2000" step="1" value={pages} onChange={e=>setPages(e.target.value)}/></label><Button type="submit" busy={savingReading}><Save size={16}/> حفظ الصفحات</Button></form><small className="muted-line">الكتاب الحالي: {challenge?.reading_book||"لم يُحدّد بعد"} · المسجّل لهذا اليوم: {number(reading?.pages_read||0)} صفحة</small></Card>
-      <div className="day-finish"><div><strong>{dayLog?.reviewed_at?"تمت مراجعة هذا اليوم":"هل انتهيت من تسجيل إنجازاتك؟"}</strong><span>{dayLog?.reviewed_at?"تم إغلاق السجل ويمكنك تعديل العادات أو القراءة ضمن قيود التاريخ.":"إنهاء اليوم يميّز اليوم الذي راجعته عن الأيام التي لم تسجّل بياناتها."}</span></div><Button variant="secondary" onClick={reviewDay} busy={savingReading} disabled={Boolean(dayLog?.reviewed_at)}>إنهاء اليوم</Button></div>
+      {visibleHabits.length===0&&<Notice tone="warning">لا توجد أهداف مفعّلة لهذا التاريخ. يمكن لمنظّم التحدّي إضافتها من صفحة إدارة التحدّي.</Notice>}<div className="habit-grid">{visibleHabits.map(h=>{const checked=completions.some(c=>c.habit_id===h.id);return <Card className={`habit-card ${checked?"completed":""}`} key={h.id}><div className="habit-card-top"><div className={`habit-icon ${checked?"done":""}`}>{icons[h.habit_key]||<Check/>}</div><span className={`status-chip ${checked?"done":"pending"}`}>{checked?"تم الإنجاز":"بانتظار التسجيل"}</span></div><h3>{h.name}</h3><p>{h.description}</p><small className="muted-line">{number(h.points)} نقاط · {h.is_required?"إلزامي":"اختياري"}</small>{h.habit_key==="chess"&&!checked&&<label className="mini-field">عدد المباريات<select value={chessGames} onChange={e=>setChessGames(Number(e.target.value))}><option value={1}>مباراة واحدة</option><option value={2}>مباراتان</option></select></label>}<Button variant={checked?"secondary":"primary"} busy={busyId===h.id} className="full-width" onClick={()=>toggle(h.id,h.habit_key,h.points)} disabled={!canEdit}>{checked?"إلغاء التسجيل":"تسجيل الإنجاز"}{checked?<CheckCircle2 size={16}/>:<Check size={16}/>}</Button></Card>})}</div>
+      {fastingToday&&visibleHabits.some(h=>h.is_fasting)&&<div className="fasting-note"><CheckCircle2 size={17}/><span>اليوم مخصّص للصيام (الاثنين أو الخميس). تسجيله يمنح نقطة إضافية.</span></div>}
+      <Card className="reading-entry"><div className="reading-header"><div className="habit-icon"><BookOpen/></div><div><h3>سجل القراءة</h3><p>تسجيل عدد الصفحات مستقل عن إنجاز عادة القراءة أعلاه.</p></div></div><form onSubmit={saveReading} className="reading-form"><label>عدد الصفحات المقروءة<input className="text-input" type="number" min="0" max="2000" step="1" value={pages} onChange={e=>setPages(e.target.value)}/></label><Button type="submit" busy={savingReading} disabled={!canEdit}><Save size={16}/> حفظ الصفحات</Button></form><small className="muted-line">الكتاب الحالي: {challenge?.reading_book||"لم يُحدّد بعد"} · المسجّل لهذا اليوم: {number(reading?.pages_read||0)} صفحة</small></Card>
+      <div className="day-finish"><div><strong>{dayLog?.reviewed_at?"تمت مراجعة هذا اليوم":"هل انتهيت من تسجيل إنجازاتك؟"}</strong><span>{dayLog?.reviewed_at?"تم إغلاق السجل ويمكنك تعديل العادات أو القراءة ضمن قيود التاريخ.":"إنهاء اليوم يميّز اليوم الذي راجعته عن الأيام التي لم تسجّل بياناتها."}</span></div><Button variant="secondary" onClick={reviewDay} busy={savingReading} disabled={!canEdit||Boolean(dayLog?.reviewed_at)}>إنهاء اليوم</Button></div>
     </>}
     {message&&<Notice tone="success">{message}</Notice>}{error&&<Notice tone="error">{error}</Notice>}
   </>;
