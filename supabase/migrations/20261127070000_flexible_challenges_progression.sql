@@ -714,8 +714,8 @@ using (id=(select auth.uid()) or public.shares_challenge_with(id));
 
 -- Join request access: members can see their own request; managers can see pending requests through RPC.
 alter table public.challenge_join_requests enable row level security;
+revoke all on public.challenge_join_requests from anon,authenticated;
 grant select,insert on public.challenge_join_requests to authenticated;
-revoke all on public.challenge_join_requests from anon;
 create policy join_requests_select_own_or_manager on public.challenge_join_requests
 for select to authenticated
 using (user_id=(select auth.uid()) or public.has_challenge_permission(challenge_id,'manage_join_requests'));
@@ -750,9 +750,9 @@ create policy challenge_comments_author_or_moderator_delete on public.challenge_
 for delete to authenticated using (author_id=(select auth.uid()) or public.has_challenge_permission(challenge_id,'moderate_posts'));
 
 alter table public.user_achievements enable row level security;
+revoke all on public.user_achievements from anon,authenticated;
 grant select on public.user_achievements to authenticated;
 grant select on public.challenge_awards to authenticated;
-revoke all on public.user_achievements from anon;
 create policy user_achievements_select_own on public.user_achievements
 for select to authenticated using (user_id=(select auth.uid()));
 
