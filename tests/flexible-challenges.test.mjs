@@ -86,3 +86,11 @@ test("existing API roles lose RLS-bypassing table and sequence privileges", asyn
   assert.match(migration, /REVOKE TRUNCATE, REFERENCES, TRIGGER\s+ON ALL TABLES IN SCHEMA public\s+FROM anon, authenticated/i);
   assert.match(migration, /REVOKE UPDATE\s+ON ALL SEQUENCES IN SCHEMA public\s+FROM anon, authenticated/i);
 });
+
+
+test("legacy comment insert policy compares the actual post and comment challenge IDs", async () => {
+  const migration = await read("../supabase/migrations/20261127150140_fix_comment_insert_policy.sql");
+  assert.match(migration, /post_row\.id = challenge_comments\.post_id/);
+  assert.match(migration, /post_row\.challenge_id = challenge_comments\.challenge_id/);
+  assert.doesNotMatch(migration, /post_row\.challenge_id\s*=\s*post_row\.challenge_id/);
+});
