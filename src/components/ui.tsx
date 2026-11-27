@@ -9,8 +9,8 @@ export function Button({ children, className, variant = "primary", busy, ...prop
   </button>;
 }
 
-export function Card({ children, className }: { children: React.ReactNode; className?: string }) {
-  return <section className={clsx("card", className)}>{children}</section>;
+export function Card({ children, className, ...props }: React.HTMLAttributes<HTMLElement> & { children: React.ReactNode }) {
+  return <section className={clsx("card", className)} {...props}>{children}</section>;
 }
 
 export function PageTitle({ title, subtitle, action }: { title: string; subtitle?: string; action?: React.ReactNode }) {
