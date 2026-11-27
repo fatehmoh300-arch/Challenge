@@ -11,7 +11,7 @@ import { Card, LoadingState, Notice, PageTitle, ProgressBar, StatCard } from "@/
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { algeriaDate } from "@/lib/date";
 import { formatArabicDate, number, percent } from "@/lib/format";
-import { isFastingDate, isFullDay, isGoalActiveOnDate, maxPointsForDate, pointsFromCompletions } from "@/lib/scoring.js";
+import { isFullDay, isGoalActiveOnDate, maxPointsForDate, pointsFromCompletions } from "@/lib/scoring.js";
 import type { HabitCompletion, MyProgress, ReadingLog } from "@/lib/types";
 import { useLeaderboard } from "@/lib/use-leaderboard";
 
@@ -210,10 +210,7 @@ export default function StatsPage() {
     return habits.map((goal) => {
       const opportunities = summaries.filter((day) => {
         const date = day.date;
-        return goal.is_active &&
-          goal.active_from <= date &&
-          (!goal.active_until || goal.active_until >= date) &&
-          (!goal.is_fasting || isFastingDate(date));
+        return isGoalActiveOnDate(goal, date);
       }).length;
       const done = completions.filter((row) =>
         row.habit_id === goal.id &&
