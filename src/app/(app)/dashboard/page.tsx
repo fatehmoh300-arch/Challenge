@@ -43,7 +43,7 @@ export default function DashboardPage() {
   }, [user, challenge, today]);
 
   const mine = board.find(x=>x.user_id===user?.id);
-  const dailyHabits = habits.filter(h=>h.active_from<=today && (!h.active_until || h.active_until>=today) && (!h.is_fasting || isFastingDay(today)));
+  const dailyHabits = habits.filter(h=>h.is_active && h.active_from<=today && (!h.active_until || h.active_until>=today) && (!h.is_fasting || isFastingDay(today)));
   const dayScore = dailyHabits.reduce((sum,h)=>sum+(done.includes(h.id)?h.points:0),0);
   const maxToday = dailyHabits.reduce((sum,h)=>sum+h.points,0);
   const scorePct = mine?.adherence_pct || 0;
