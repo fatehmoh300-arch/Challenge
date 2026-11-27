@@ -4,8 +4,10 @@ export function isFastingDate(value) {
   return day === 1 || day === 4;
 }
 
-function isGoalActiveOnDate(goal, value) {
-  if (goal.is_active === false) return false;
+export function isGoalActiveOnDate(goal, value) {
+  // is_active describes the current/future state. A deactivated goal with an
+  // active_until date remains part of historical calculations before that date.
+  if (goal.is_active === false && !goal.active_until) return false;
   if (goal.active_from && value < goal.active_from) return false;
   if (goal.active_until && value > goal.active_until) return false;
   if (goal.is_fasting && !isFastingDate(value)) return false;
