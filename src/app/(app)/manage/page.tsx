@@ -53,22 +53,27 @@ export default function ManagePage(){
     if(!challenge)return;
     let live=true;
     const load=async()=>{
-      setLoading(true);
-      const memberQuery=sb.rpc("get_challenge_members",{p_challenge_id:challenge.id});
-      const requestQuery=canRequests
-        ? sb.rpc("get_challenge_join_requests",{p_challenge_id:challenge.id})
-        : Promise.resolve({data:[],error:null});
-      const [memberResult,requestResult]=await Promise.all([memberQuery,requestQuery]);
-      if(!live)return;
-      if(memberResult.error)throw memberResult.error;
-      if(requestResult.error)throw requestResult.error;
-      const memberRows=(memberResult.data||[]) as MemberRow[];
-      setMembers(memberRows);
-      const drafts:Record<string,{role:MemberRow["role"];permissions:string[]}>={};
-      memberRows.forEach(m=>drafts[m.user_id]={role:m.role,permissions:m.permissions||[]});
-      setMemberDrafts(drafts);
-      setRequests(canRequests?(requestResult.data||[]) as JoinRequest[]:[]);
-      setLoading(false);
+      setLoading(true);setError("");
+      try {
+        const memberQuery=sb.rpc("get_challenge_members",{p_challenge_id:challenge.id});
+        const requestQuery=canRequests
+          ? sb.rpc("get_challenge_join_requests",{p_challenge_id:challenge.id})
+          : Promise.resolve({data:[],error:null});
+        const [memberResult,requestResult]=await Promise.all([memberQuery,requestQuery]);
+        if(!live)return;
+        if(memberResult.error)throw memberResult.error;
+        if(requestResult.error)throw requestResult.error;
+        const memberRows=(memberResult.data||[]) as MemberRow[];
+        setMembers(memberRows);
+        const drafts:Record<string,{role:MemberRow["role"];permissions:string[]}>={};
+        memberRows.forEach(m=>drafts[m.user_id]={role:m.role,permissions:m.permissions||[]});
+        setMemberDrafts(drafts);
+        setRequests(canRequests?(requestResult.data||[]) as JoinRequest[]:[]);
+      } catch(cause) {
+        if(live)setError(cause instanceof Error?cause.message:"تعذّر تحميل المشاركين وطلبات الانضمام.");
+      } finally {
+        if(live)setLoading(false);
+      }
     };
     void load();return()=>{live=false;};
   },[challenge?.id,canRequests]);
