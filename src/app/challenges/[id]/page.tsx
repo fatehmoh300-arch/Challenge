@@ -16,7 +16,7 @@ type ChallengeDetails = {
 export default function ChallengeDetailsPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
-  const { user, refresh } = useApp();
+  const { user, refresh, memberships } = useApp();
   const [joining, setJoining] = useState(false);
   const [joinError, setJoinError] = useState("");
   const [joinMessage, setJoinMessage] = useState("");
@@ -48,6 +48,11 @@ export default function ChallengeDetailsPage() {
       return;
     }
     setJoinMessage("");
+    if (memberships.some(member => member.challenge_id === item?.id)) {
+      await refresh(item?.id);
+      router.replace("/dashboard");
+      return;
+    }
     setJoining(true);
     setJoinError("");
     try {
