@@ -13,6 +13,7 @@ import { useLeaderboard } from "@/lib/use-leaderboard";
 export default function DashboardPage() {
   const { user, profile, challenge, habits } = useApp();
   const [done, setDone] = useState<string[]>([]);
+  const [earnedPoints, setEarnedPoints] = useState<Record<string, number>>({});
   const [pages, setPages] = useState(0);
   const [loading, setLoading] = useState(true);
   const { entries: board, loading: boardLoading } = useLeaderboard(challenge?.id);
@@ -30,11 +31,12 @@ export default function DashboardPage() {
       setLoading(true);
       const supabase = getSupabaseBrowserClient();
       const [{ data: completions }, { data: reading }] = await Promise.all([
-        supabase.from("habit_completions").select("habit_id").eq("challenge_id", challenge.id).eq("user_id", user.id).eq("log_date", today),
+        supabase.from("habit_completions").select("habit_id,points_awarded").eq("challenge_id", challenge.id).eq("user_id", user.id).eq("log_date", today),
         supabase.from("reading_logs").select("pages_read").eq("challenge_id", challenge.id).eq("user_id", user.id).eq("log_date", today).maybeSingle(),
       ]);
       if (!live) return;
       setDone((completions || []).map((x: {habit_id:string})=>x.habit_id));
+      setEarnedPoints(Object.fromEntries((completions || []).map((x: {habit_id:string;points_awarded:number})=>[x.habit_id,Number(x.points_awarded)])));
       setPages(reading?.pages_read || 0);
       setLoading(false);
     };
@@ -43,8 +45,8 @@ export default function DashboardPage() {
   }, [user, challenge, today]);
 
   const mine = board.find(x=>x.user_id===user?.id);
-  const dailyHabits = habits.filter(h=>h.is_active && h.active_from<=today && (!h.active_until || h.active_until>=today) && (!h.is_fasting || isFastingDay(today)));
-  const dayScore = dailyHabits.reduce((sum,h)=>sum+(done.includes(h.id)?h.points:0),0);
+  const dailyHabits = habits.filter(h=>h.active_from<=today && (!h.active_until || h.active_until>=today) && (!h.is_fasting || isFastingDay(today)));
+  const dayScore = dailyHabits.reduce((sum,h)=>sum+(done.includes(h.id)?(earnedPoints[h.id]??h.points):0),0);
   const maxToday = dailyHabits.reduce((sum,h)=>sum+h.points,0);
   const scorePct = mine?.adherence_pct || 0;
   const dayPct = maxToday ? Math.round(dayScore / maxToday * 100) : 0;
