@@ -1,5 +1,6 @@
 name: Install Challenge platform source
 on:
+  workflow_dispatch:
   push:
     branches:
       - feature/challenge-platform-v1
