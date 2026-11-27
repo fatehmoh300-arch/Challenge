@@ -626,12 +626,19 @@ returns void
 language plpgsql security definer
 set search_path = ''
 as $$
-declare r public.challenge_join_requests%rowtype; c public.challenges%rowtype;
+declare
+  r public.challenge_join_requests%rowtype;
+  c public.challenges%rowtype;
+  v_challenge_id uuid;
 begin
-  select * into r from public.challenge_join_requests where id=p_request_id for update;
+  -- Lock challenge first, matching the join-request path and avoiding reversed lock order.
+  select challenge_id into v_challenge_id
+  from public.challenge_join_requests where id=p_request_id;
   if not found then raise exception 'الطلب غير موجود'; end if;
+  select * into c from public.challenges where id=v_challenge_id for update;
+  if not found then raise exception 'التحدّي غير موجود'; end if;
+  select * into r from public.challenge_join_requests where id=p_request_id for update;
   if not public.has_challenge_permission(r.challenge_id,'manage_join_requests') then raise exception 'لا تملك صلاحية مراجعة الطلبات'; end if;
-  select * into c from public.challenges where id=r.challenge_id for update;
   if r.status<>'pending' then raise exception 'تمت مراجعة هذا الطلب سابقاً'; end if;
   if p_approve then
     if c.member_count>=c.max_members then raise exception 'اكتمل العدد المسموح للمشاركين'; end if;
