@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import type { LeaderboardEntry } from "@/lib/types";
+import { assignCompetitionRanks } from "@/lib/scoring.js";
 
 type Snapshot = {
   entries: LeaderboardEntry[];
@@ -63,13 +64,7 @@ async function loadLeaderboard(challengeId: string, force = false): Promise<void
       if (queryError) throw queryError;
 
       const rawEntries = (data || []) as Omit<LeaderboardEntry, "competition_rank">[];
-      const entries: LeaderboardEntry[] = rawEntries.map((entry) => ({
-        ...entry,
-        // Competition ranking: equal scores share a rank; the next rank skips
-        // the occupied places (1, 1, 3). The database order remains stable.
-        competition_rank:
-          rawEntries.findIndex((candidate) => candidate.points === entry.points) + 1,
-      }));
+      const entries = assignCompetitionRanks(rawEntries) as LeaderboardEntry[];
 
       store.lastUpdatedAt = Date.now();
       publish(store, { entries, loading: false, error: "" });
