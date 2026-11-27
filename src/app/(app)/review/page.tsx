@@ -7,7 +7,7 @@ import { Card, LoadingState, Notice, PageTitle, ProgressBar, StatCard } from "@/
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { algeriaDate } from "@/lib/date";
 import { formatArabicDate, number, percent } from "@/lib/format";
-import { isFastingDate, isFullDay, pointsFromCompletions } from "@/lib/scoring.js";
+import { isFastingDate, isFullDay, isGoalActiveOnDate, pointsFromCompletions } from "@/lib/scoring.js";
 import type { DailyLog, HabitCompletion, ReadingLog } from "@/lib/types";
 
 function enumerateDates(start: string, end: string) {
@@ -135,12 +135,7 @@ export default function ReviewPage() {
 
     const dayRows: DayReport[] = days.map((date) => {
       const dayCompletions = completionByDate.get(date) || [];
-      const activeGoals = habits.filter((goal) =>
-        goal.is_active &&
-        goal.active_from <= date &&
-        (!goal.active_until || goal.active_until >= date) &&
-        (!goal.is_fasting || isFastingDate(date)),
-      );
+      const activeGoals = habits.filter((goal) => isGoalActiveOnDate(goal, date));
       return {
         date,
         points: pointsFromCompletions(dayCompletions, habits),
@@ -156,12 +151,7 @@ export default function ReviewPage() {
     const pagesRead = readings.reduce((sum, row) => sum + Number(row.pages_read || 0), 0);
     const reviewedIncompleteDays = eligibleDays.filter((day) => day.reviewed && !day.full).length;
     const opportunitiesByGoal = habits.map((goal) => {
-      const activeDates = days.filter((date) =>
-        goal.is_active &&
-        goal.active_from <= date &&
-        (!goal.active_until || goal.active_until >= date) &&
-        (!goal.is_fasting || isFastingDate(date)),
-      );
+      const activeDates = days.filter((date) => isGoalActiveOnDate(goal, date));
       const goalCompletions = completions.filter((row) =>
         row.habit_id === goal.id && activeDates.includes(row.log_date),
       );
@@ -190,8 +180,9 @@ export default function ReviewPage() {
     const lastWindowPoints = dayRows
       .filter((day) => day.date >= (lastSevenStart < challenge.start_date ? challenge.start_date : lastSevenStart))
       .reduce((sum, day) => sum + day.points, 0);
+    const reviewedEligibleDays = eligibleDays.filter((day) => reviewedDates.has(day.date)).length;
     const reviewCoverage = eligibleDays.length
-      ? reviewedDates.size / eligibleDays.length * 100
+      ? reviewedEligibleDays / eligibleDays.length * 100
       : 0;
 
     return {
