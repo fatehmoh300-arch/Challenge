@@ -141,7 +141,7 @@ export default function StatsPage() {
       const activeGoals = habits.filter((goal) => isGoalActiveOnDate(goal, date));
       return {
         date,
-        points: pointsFromCompletions(dayRows, habits),
+        points: pointsFromCompletions(dayRows),
         pages: readingsByDate.get(date) || 0,
         full: isFullDay(dayRows, habits, date),
         requiredGoals: activeGoals.filter((goal) => goal.is_required).length,
