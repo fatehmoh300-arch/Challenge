@@ -155,8 +155,7 @@ export default function StatsPage() {
     const points = summaries.reduce((sum, day) => sum + day.points, 0);
     const possiblePoints = summaries.reduce((sum, day) => sum + day.possiblePoints, 0);
     const opportunities = summaries.reduce((sum, day) => {
-      const [year, month, date] = day.date.split("-").map(Number);
-      const value = `${year}-${String(month).padStart(2, "0")}-${String(date).padStart(2, "0")}`;
+      const value = day.date;
       const active = habits.filter((goal) => isGoalActiveOnDate(goal, value));
       return sum + active.length;
     }, 0);
@@ -185,7 +184,7 @@ export default function StatsPage() {
     }
 
     const bestDay = summaries.reduce<DaySummary | null>(
-      (best, day) => !best || day.points > best.points ? day : best,
+      (best, day) => day.points > 0 && (!best || day.points > best.points) ? day : best,
       null,
     );
     const totalPages = summaries.reduce((sum, day) => sum + day.pages, 0);
