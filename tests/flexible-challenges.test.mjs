@@ -79,3 +79,10 @@ test("P1 review indexes the comment foreign key and hardens trigger RPC identity
   assert.match(migration, /p_user_id IS DISTINCT FROM v_uid/);
   assert.match(migration, /SET search_path = ''/);
 });
+
+
+test("existing API roles lose RLS-bypassing table and sequence privileges", async () => {
+  const migration = await read("../supabase/migrations/20261127145647_p0_global_privilege_hardening.sql");
+  assert.match(migration, /REVOKE TRUNCATE, REFERENCES, TRIGGER\s+ON ALL TABLES IN SCHEMA public\s+FROM anon, authenticated/i);
+  assert.match(migration, /REVOKE UPDATE\s+ON ALL SEQUENCES IN SCHEMA public\s+FROM anon, authenticated/i);
+});
