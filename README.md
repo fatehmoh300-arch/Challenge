@@ -12,7 +12,8 @@
 2. افتح SQL Editor وشغّل ملفات `supabase/migrations` بالترتيب التصاعدي حسب اسم الملف:
    - `202611270001_challenge_schema.sql`
    - `202611270002_hardening_and_scoring.sql`
-   إذا كنت قد شغّلت الملف الأول سابقاً، شغّل الملف الثاني فقط.
+   - `202611270003_advisor_hardening.sql`
+   إذا كانت الملفات السابقة مطبّقة بالفعل، شغّل فقط الملفات التي لم تُطبّق بعد، بالترتيب.
 3. في Supabase Authentication → URL Configuration، اضبط Site URL وأضف عنوان الموقع المحلي وعنوان Vercel إلى Redirect URLs، مع المسار `/auth/callback`.
 4. انسخ `.env.example` إلى `.env.local`، وأدخل Project URL وPublishable Key من إعدادات مشروع Supabase.
 5. نفّذ `npm install` ثم `npm run dev`.
