@@ -33,7 +33,7 @@ function DailyPageContent() {
   const canEdit = Boolean(eligible && challenge && (challenge.status==="open" || challenge.status==="active"));
   const fastingToday = isFastingDay(date);
   const visibleHabits = habits.filter(h=>isGoalActiveOnDate(h,date));
-  const score = visibleHabits.reduce((sum,h)=>{const completion=completions.find(x=>x.habit_id===h.id);return sum+(completion?Number(completion.points_awarded??h.points):0);},0);
+  const score = visibleHabits.reduce((sum,h)=>{const completion=completions.find(x=>x.habit_id===h.id);return sum+(completion?Number(completion.points_awarded??0):0);},0);
   const maxPoints = visibleHabits.reduce((sum,h)=>sum+h.points,0);
   const requiredCount = visibleHabits.filter(h=>h.is_required).length;
   const requiredDone = visibleHabits.filter(h=>h.is_required && completions.some(x=>x.habit_id===h.id)).length;
