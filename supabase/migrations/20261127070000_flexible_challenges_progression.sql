@@ -281,10 +281,17 @@ returns void
 language plpgsql security definer
 set search_path = ''
 as $$
-declare v_members integer;
+declare
+  v_members integer;
+  v_status text;
 begin
   if not public.has_challenge_permission(p_challenge_id,'manage_rules') then
     raise exception 'لا تملك صلاحية تعديل إعدادات التحدّي';
+  end if;
+  select status into v_status from public.challenges where id=p_challenge_id for update;
+  if not found then raise exception 'التحدّي غير موجود'; end if;
+  if v_status in ('completed','archived') then
+    raise exception 'لا يمكن تعديل إعدادات تحدٍّ مكتمل أو مؤرشف';
   end if;
   if p_title is null or char_length(pg_catalog.btrim(p_title)) not between 3 and 80 then
     raise exception 'اسم التحدّي يجب أن يكون بين 3 و80 حرفاً';
@@ -384,13 +391,15 @@ declare
   v_start date;
   v_end date;
   v_active_from date;
+  v_status text;
 begin
   if not public.has_challenge_permission(p_challenge_id,'manage_rules') then raise exception 'لا تملك صلاحية إضافة أهداف'; end if;
   if p_name is null or char_length(pg_catalog.btrim(p_name)) not between 2 and 80 then raise exception 'اسم الهدف يجب أن يكون بين حرفين و80 حرفاً'; end if;
   if coalesce(char_length(p_description),0)>500 then raise exception 'الوصف طويل جداً'; end if;
   if p_points not between 1 and 100 then raise exception 'النقاط يجب أن تكون بين 1 و100'; end if;
-  select start_date,end_date into v_start,v_end from public.challenges where id=p_challenge_id;
+  select start_date,end_date,status into v_start,v_end,v_status from public.challenges where id=p_challenge_id;
   if v_start is null then raise exception 'التحدّي غير موجود'; end if;
+  if v_status in ('completed','archived') then raise exception 'لا يمكن إضافة أهداف إلى تحدٍّ مكتمل أو مؤرشف'; end if;
   v_active_from:=greatest(v_start,(now() at time zone 'Africa/Algiers')::date);
   if v_active_from>v_end then raise exception 'انتهت فترة التحدّي ولا يمكن إضافة أهداف جديدة'; end if;
   insert into public.habits(challenge_id,habit_key,name,description,sort_order,is_fasting,points,is_required,is_active,active_from,active_until)
@@ -420,8 +429,11 @@ declare
   v_old_required boolean;
   v_old_active boolean;
   v_has_activity boolean;
+  v_challenge_status text;
 begin
   if not public.has_challenge_permission(p_challenge_id,'manage_rules') then raise exception 'لا تملك صلاحية تعديل الأهداف'; end if;
+  select status into v_challenge_status from public.challenges where id=p_challenge_id;
+  if v_challenge_status in ('completed','archived') then raise exception 'لا يمكن تعديل أهداف تحدٍّ مكتمل أو مؤرشف'; end if;
   if p_name is null or char_length(pg_catalog.btrim(p_name)) not between 2 and 80 then raise exception 'اسم الهدف غير صحيح'; end if;
   if coalesce(char_length(p_description),0)>500 or p_points not between 1 and 100 then raise exception 'الوصف أو النقاط غير صحيحة'; end if;
 
@@ -432,8 +444,11 @@ begin
     raise exception 'الهدف المؤرشف لا يعاد تفعيله؛ أضف هدفاً جديداً للحفاظ على سجل الإنجازات';
   end if;
 
-  select exists(select 1 from public.daily_logs where challenge_id=p_challenge_id)
-    into v_has_activity;
+  select (
+    exists(select 1 from public.daily_logs where challenge_id=p_challenge_id)
+    or exists(select 1 from public.habit_completions where challenge_id=p_challenge_id)
+    or exists(select 1 from public.reading_logs where challenge_id=p_challenge_id)
+  ) into v_has_activity;
   if v_has_activity and (p_points<>v_old_points or p_is_required is distinct from v_old_required) then
     raise exception 'بدأ تسجيل الإنجازات؛ لا يمكن تغيير وزن النقاط أو إلزامية هدف قائم. أوقفه وأضف هدفاً جديداً';
   end if;
@@ -494,13 +509,18 @@ declare
   v_fasting boolean;
   v_key text;
   v_points smallint;
+  v_active_from date;
+  v_active_until date;
 begin
   perform public.validate_user_day(new.challenge_id,new.user_id,new.log_date);
-  select h.is_fasting,h.habit_key,h.points
-    into v_fasting,v_key,v_points
+  select h.is_fasting,h.habit_key,h.points,h.active_from,h.active_until
+    into v_fasting,v_key,v_points,v_active_from,v_active_until
     from public.habits h
    where h.id=new.habit_id and h.challenge_id=new.challenge_id;
   if v_key is null then raise exception 'العادة غير مرتبطة بهذا التحدّي'; end if;
+  if new.log_date<v_active_from or (v_active_until is not null and new.log_date>v_active_until) then
+    raise exception 'هذا الهدف غير متاح في التاريخ المحدد';
+  end if;
   if v_fasting and extract(isodow from new.log_date) not in (1,4) then
     raise exception 'هذا الهدف لا يمكن تسجيله إلا يوم الاثنين أو الخميس';
   end if;
@@ -624,6 +644,9 @@ end;
 $invite$;
 revoke all on function public.join_challenge(text) from public,anon;
 grant execute on function public.join_challenge(text) to authenticated;
+
+-- Completion records are append/delete-only from the client. Replace a record by deleting and inserting it again.
+revoke update on public.habit_completions from authenticated;
 
 -- Public challenges may be open, approval-based, or invite-only.
 create or replace function public.request_join_challenge(p_challenge_id uuid,p_message text default '')
