@@ -102,3 +102,11 @@ export type ChallengeComment = {
   content: string;
   created_at: string;
 };
+
+export type MyAward = {
+  challenge_id: string;
+  challenge_title: string;
+  place: 1 | 2 | 3;
+  points: number;
+  awarded_at: string;
+};
