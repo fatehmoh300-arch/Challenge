@@ -100,7 +100,7 @@ export default function ExplorePage() {
               <Link href={`/challenges/${item.id}`} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, borderRadius: 11, background: "#3157d5", color: "white", textDecoration: "none", padding: "11px 14px", fontWeight: 700 }}>عرض التفاصيل <ArrowLeft size={16}/></Link>
             </article>)}
           </div>}
-        {hasMore && !error && <div style={{display:"flex",justifyContent:"center",marginTop:22}}><button disabled={loadingMore} onClick={() => void load(page+1,true)} style={{border:0,borderRadius:11,padding:"12px 22px",background:"#3157d5",color:"white",fontWeight:700,opacity:loadingMore?.65:1}}>{loadingMore ? "جارٍ التحميل…" : "عرض تحديات إضافية"}</button></div>}
+        {hasMore && !error && <div style={{display:"flex",justifyContent:"center",marginTop:22}}><button disabled={loadingMore} onClick={() => void load(page+1,true)} style={{border:0,borderRadius:11,padding:"12px 22px",background:"#3157d5",color:"white",fontWeight:700,opacity:loadingMore ? 0.65 : 1}}>{loadingMore ? "جارٍ التحميل…" : "عرض تحديات إضافية"}</button></div>}
       </section>
     </main>
   );
