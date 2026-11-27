@@ -33,6 +33,7 @@ export default function ManagePage(){
   const [difficulty,setDifficulty]=useState<"easy"|"medium"|"hard">("medium");
   const [joinMode,setJoinMode]=useState<"open"|"approval"|"invite">("invite");
   const [maxMembers,setMaxMembers]=useState(50);
+  const [status,setStatus]=useState("active");
   const [loading,setLoading]=useState(true);
   const [busy,setBusy]=useState("");
   const [message,setMessage]=useState("");
@@ -42,7 +43,7 @@ export default function ManagePage(){
     if(!challenge)return;
     setTitle(challenge.title);setDescription(challenge.description||"");setCategory(challenge.category||"عام");
     setStartDate(challenge.start_date);setEndDate(challenge.end_date);setVisibility(challenge.visibility);
-    setDifficulty(challenge.difficulty);setJoinMode(challenge.join_mode);setMaxMembers(challenge.max_members);
+    setDifficulty(challenge.difficulty);setJoinMode(challenge.join_mode);setMaxMembers(challenge.max_members);setStatus(challenge.status);
   },[challenge]);
 
   useEffect(()=>{
@@ -81,6 +82,15 @@ export default function ManagePage(){
       });
       if(e)throw e;await refresh();setMessage("تم حفظ إعدادات التحدّي.");
     }catch(e){setError(e instanceof Error?e.message:"تعذّر حفظ الإعدادات.");}
+    finally{setBusy("");}
+  };
+
+  const saveStatus=async()=>{
+    if(!challenge)return;setBusy("status");setError("");setMessage("");
+    try{
+      const {error:e}=await sb.rpc("set_challenge_status",{p_challenge_id:challenge.id,p_status:status});
+      if(e)throw e;await refresh();setMessage("تم تحديث حالة التحدّي.");
+    }catch(e){setError(e instanceof Error?e.message:"تعذّر تغيير حالة التحدّي.");}
     finally{setBusy("");}
   };
 
@@ -161,9 +171,13 @@ export default function ManagePage(){
           <label>الصعوبة<select className="text-input" value={difficulty} onChange={e=>setDifficulty(e.target.value as typeof difficulty)}><option value="easy">مبتدئ</option><option value="medium">متوسط</option><option value="hard">متقدم</option></select></label>
           {visibility==="public"&&<label>طريقة الانضمام<select className="text-input" value={joinMode} onChange={e=>setJoinMode(e.target.value as typeof joinMode)}><option value="open">مفتوح</option><option value="approval">بموافقة</option><option value="invite">بدعوة</option></select></label>}
           <label>السعة<select className="text-input" value={maxMembers} onChange={e=>setMaxMembers(Number(e.target.value))}>{[2,10,25,50,100,250,500].map(n=><option key={n} value={n}>{n} مشارك</option>)}</select></label>
+          <label>حالة التحدّي<select className="text-input" value={status} onChange={e=>setStatus(e.target.value)}><option value="open">مفتوح للانضمام</option><option value="active">نشط</option><option value="paused">متوقف مؤقتاً</option><option value="completed">مكتمل</option><option value="archived">مؤرشف</option></select></label>
         </div>
         <label style={{display:"block",marginTop:12}}>الوصف<textarea className="text-input" rows={3} value={description} maxLength={2000} onChange={e=>setDescription(e.target.value)}/></label>
-        <Button onClick={saveChallenge} busy={busy==="challenge"} disabled={!title.trim()||!startDate||!endDate||endDate<startDate}><Save size={16}/> حفظ الإعدادات</Button>
+        <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+          <Button onClick={saveChallenge} busy={busy==="challenge"} disabled={!title.trim()||!startDate||!endDate||endDate<startDate}><Save size={16}/> حفظ الإعدادات</Button>
+          <Button variant="secondary" onClick={saveStatus} busy={busy==="status"}>حفظ حالة التحدّي</Button>
+        </div>
       </>}
     </Card>
 
@@ -185,7 +199,7 @@ export default function ManagePage(){
               <label>النقاط<input className="text-input" type="number" min="1" max="100" value={d.points} disabled={!canRules} onChange={e=>patchGoal(h.id,{points:Number(e.target.value)})}/></label>
               <label style={{gridColumn:"1/-1"}}>الوصف<input className="text-input" value={d.description} disabled={!canRules} onChange={e=>patchGoal(h.id,{description:e.target.value})}/></label>
               <label className="checkbox-label"><input type="checkbox" checked={d.is_required} disabled={!canRules} onChange={e=>patchGoal(h.id,{is_required:e.target.checked})}/> إلزامي</label>
-              <label className="checkbox-label"><input type="checkbox" checked={d.is_active} disabled={!canRules} onChange={e=>patchGoal(h.id,{is_active:e.target.checked})}/> مفعّل</label>
+              <label className="checkbox-label"><input type="checkbox" checked={d.is_active} disabled={!canRules||!h.is_active} onChange={e=>patchGoal(h.id,{is_active:e.target.checked})}/> مفعّل</label>
             </div>
             {canRules&&<Button variant="secondary" onClick={()=>saveGoal(h.id)} busy={busy===h.id}><Save size={15}/> حفظ الهدف</Button>}
           </div>;
