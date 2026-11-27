@@ -138,7 +138,7 @@ export default function ReviewPage() {
       const activeGoals = habits.filter((goal) => isGoalActiveOnDate(goal, date));
       return {
         date,
-        points: pointsFromCompletions(dayCompletions, habits),
+        points: pointsFromCompletions(dayCompletions),
         full: isFullDay(dayCompletions, habits, date),
         requiredCount: activeGoals.filter((goal) => goal.is_required).length,
         reviewed: reviewedDates.has(date),
