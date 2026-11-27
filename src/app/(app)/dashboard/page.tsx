@@ -2,11 +2,11 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { Activity, ArrowLeft, BookOpen, CalendarDays, CheckCircle2, Flame, Footprints, Sparkles, Target, Trophy } from "lucide-react";
+import { ArrowLeft, BookOpen, CalendarDays, CheckCircle2, Flame, Footprints, Sparkles, Target, Trophy } from "lucide-react";
 import { Card, EmptyState, LoadingState, PageTitle, ProgressBar, StatCard } from "@/components/ui";
 import { useApp } from "@/components/app-provider";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
-import { algeriaDate, daysUntil, isFastingDay } from "@/lib/date";
+import { algeriaDate, daysUntil } from "@/lib/date";
 import { isGoalActiveOnDate } from "@/lib/scoring.js";
 import { formatArabicDate, number, percent } from "@/lib/format";
 import { useLeaderboard } from "@/lib/use-leaderboard";
