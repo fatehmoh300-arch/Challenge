@@ -38,6 +38,7 @@ export default function CommunityPage(){
         .select("id,challenge_id,author_id,content,created_at,is_announcement")
         .eq("challenge_id",challenge.id)
         .order("created_at",{ascending:false})
+        .order("id",{ascending:false})
         .range(targetPage*PAGE_SIZE,targetPage*PAGE_SIZE+PAGE_SIZE-1);
       if(postError)throw postError;
       const rawPosts=(postData||[]) as Omit<PostRow,"comments"|"author_name">[];
@@ -47,10 +48,11 @@ export default function CommunityPage(){
         const {data:commentData,error:commentError}=await sb.from("challenge_comments")
           .select("id,post_id,challenge_id,author_id,content,created_at")
           .in("post_id",ids)
-          .order("created_at",{ascending:true})
+          .order("created_at",{ascending:false})
+          .order("id",{ascending:false})
           .limit(COMMENT_BATCH_LIMIT);
         if(commentError)throw commentError;
-        comments=(commentData||[]) as CommentRow[];
+        comments=((commentData||[]) as CommentRow[]).reverse();
       }
       const userIds=[...new Set([...rawPosts.map(p=>p.author_id),...comments.map(c=>c.author_id)])];
       let profileMap=new Map<string,string>();
