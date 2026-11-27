@@ -16,9 +16,10 @@ type ChallengeDetails = {
 export default function ChallengeDetailsPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
-  const { user, challenge: currentChallenge, refresh } = useApp();
+  const { user, refresh } = useApp();
   const [joining, setJoining] = useState(false);
   const [joinError, setJoinError] = useState("");
+  const [joinMessage, setJoinMessage] = useState("");
   const [item, setItem] = useState<ChallengeDetails | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
@@ -46,16 +47,17 @@ export default function ChallengeDetailsPage() {
       router.push(`/login?next=${encodeURIComponent(`/challenges/${params.id}`)}`);
       return;
     }
-    if (currentChallenge) {
-      setJoinError("حسابك مرتبط حالياً بمساحة تحدٍّ أخرى. دعم تعدد التحديات في الحساب الواحد ما زال قيد التطوير.");
-      return;
-    }
+    setJoinMessage("");
     setJoining(true);
     setJoinError("");
     try {
-      const { error } = await getSupabaseBrowserClient().rpc("join_public_challenge", { p_challenge_id: item?.id });
+      const { error } = await getSupabaseBrowserClient().rpc("request_join_challenge", { p_challenge_id: item?.id, p_message: "" });
       if (error) throw error;
-      await refresh();
+      if (item?.join_mode === "approval") {
+        setJoinMessage("تم إرسال طلب الانضمام. سيظهر التحدّي في حسابك بعد موافقة المنظّم.");
+        return;
+      }
+      await refresh(item?.id);
       router.replace("/dashboard");
     } catch (e) {
       setJoinError(e instanceof Error ? e.message : "تعذّر الانضمام إلى التحدّي.");
@@ -81,7 +83,8 @@ export default function ChallengeDetailsPage() {
       <div style={{ background: "#f7f8fc", borderRadius: 14, padding: 17, marginTop: 22, color: "#66738a", lineHeight: 1.8, fontSize: 14 }}>
         {item.join_mode === "open" ? "هذا التحدّي يسمح بالانضمام المفتوح." : item.join_mode === "approval" ? "يتطلب الانضمام موافقة مدير التحدّي." : "الانضمام إلى هذا التحدّي يتطلب دعوة."}
       </div>
-      {item.join_mode === "open" ? <button onClick={join} disabled={joining || Boolean(currentChallenge)} style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", marginTop: 24, background: currentChallenge ? "#9aa5ba" : "#3157d5", color: "white", border: 0, borderRadius: 12, padding: 14, fontWeight: 700, cursor: currentChallenge ? "not-allowed" : "pointer" }}>{joining ? "جارٍ الانضمام…" : user ? "انضم إلى التحدّي" : "سجّل الدخول للانضمام"}</button> : <p style={{ color: "#718096", marginTop: 22, fontSize: 14 }}>الانضمام متاح عبر دعوة من منشئ التحدّي.</p>}
+      {item.join_mode !== "invite" ? <button onClick={join} disabled={joining} style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", marginTop: 24, background: "#3157d5", color: "white", border: 0, borderRadius: 12, padding: 14, fontWeight: 700, cursor: "pointer" }}>{joining ? "جارٍ إرسال الطلب…" : !user ? "سجّل الدخول للانضمام" : item.join_mode === "approval" ? "طلب الانضمام" : "انضم إلى التحدّي"}</button> : <p style={{ color: "#718096", marginTop: 22, fontSize: 14 }}>الانضمام متاح عبر دعوة من منشئ التحدّي.</p>}
+      {joinMessage && <p role="status" style={{ color: "#246b45", background: "#eaf7ef", padding: 12, borderRadius: 10, marginTop: 12 }}>{joinMessage}</p>}
       {joinError && <p role="alert" style={{ color: "#a33b32", background: "#fff1f0", padding: 12, borderRadius: 10, marginTop: 12 }}>{joinError}</p>}
     </article>
   </main>;
