@@ -144,6 +144,19 @@ create table if not exists public.user_achievements (
 create index if not exists idx_user_achievements_user
   on public.user_achievements(user_id,earned_at desc);
 
+-- Digital podium awards are granted automatically when a challenge is completed.
+create table if not exists public.challenge_awards (
+  challenge_id uuid not null references public.challenges(id) on delete cascade,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  place smallint not null check (place between 1 and 3),
+  points integer not null check (points > 0),
+  awarded_at timestamptz not null default now(),
+  primary key(challenge_id,user_id),
+  unique(challenge_id,place)
+);
+create index if not exists idx_challenge_awards_user
+  on public.challenge_awards(user_id,awarded_at desc);
+
 -- The owner always has full authority; delegated permissions are challenge-scoped.
 create or replace function public.has_challenge_permission(p_challenge_id uuid,p_permission text)
 returns boolean
@@ -300,6 +313,7 @@ returns void
 language plpgsql security definer
 set search_path = ''
 as $status$
+declare v_old_status text;
 begin
   if not public.has_challenge_permission(p_challenge_id,'manage_rules') then
     raise exception 'لا تملك صلاحية تغيير حالة التحدّي';
@@ -307,13 +321,30 @@ begin
   if p_status not in ('open','active','paused','completed','archived') then
     raise exception 'حالة التحدّي غير صالحة';
   end if;
+  select status into v_old_status from public.challenges where id=p_challenge_id for update;
+  if not found then raise exception 'التحدّي غير موجود'; end if;
   if p_status='open' and not exists (
     select 1 from public.challenges c where c.id=p_challenge_id and c.visibility='public'
   ) then
     raise exception 'الحالة المفتوحة مخصصة للتحديات العامة';
   end if;
+  if exists(select 1 from public.challenge_awards a where a.challenge_id=p_challenge_id)
+    and p_status<>'completed' then
+    raise exception 'تم اعتماد جوائز التحدّي؛ لا يمكن إعادة فتحه أو تغيير حالته';
+  end if;
   update public.challenges set status=p_status where id=p_challenge_id;
-  if not found then raise exception 'التحدّي غير موجود'; end if;
+  if p_status='completed' and v_old_status<>'completed' then
+    insert into public.challenge_awards(challenge_id,user_id,place,points)
+    select p_challenge_id,ranked.user_id,ranked.place,ranked.points
+    from (
+      select lb.user_id,lb.points,
+        row_number() over(order by lb.points desc,lb.display_name asc)::smallint as place
+      from public.get_challenge_leaderboard(p_challenge_id) lb
+      where lb.points>0
+    ) ranked
+    where ranked.place<=3
+    on conflict do nothing;
+  end if;
 end;
 $status$;
 revoke all on function public.set_challenge_status(uuid,text) from public,anon;
@@ -698,9 +729,32 @@ for delete to authenticated using (author_id=(select auth.uid()) or public.has_c
 
 alter table public.user_achievements enable row level security;
 grant select on public.user_achievements to authenticated;
+grant select on public.challenge_awards to authenticated;
 revoke all on public.user_achievements from anon;
 create policy user_achievements_select_own on public.user_achievements
 for select to authenticated using (user_id=(select auth.uid()));
+
+alter table public.challenge_awards enable row level security;
+revoke all on public.challenge_awards from anon,authenticated;
+grant select on public.challenge_awards to authenticated;
+create policy challenge_awards_select_own on public.challenge_awards
+for select to authenticated using (user_id=(select auth.uid()));
+
+create or replace function public.get_my_awards()
+returns table(
+  challenge_id uuid,challenge_title text,place smallint,points integer,awarded_at timestamptz
+)
+language sql stable security definer
+set search_path = ''
+as $awards$
+  select a.challenge_id,c.title,a.place,a.points,a.awarded_at
+  from public.challenge_awards a
+  join public.challenges c on c.id=a.challenge_id
+  where a.user_id=(select auth.uid())
+  order by a.awarded_at desc,a.place asc;
+$awards$;
+revoke all on function public.get_my_awards() from public,anon;
+grant execute on function public.get_my_awards() to authenticated;
 
 -- Recalculate achievement awards from actual records; XP is derived, never client-editable.
 create or replace function public.refresh_user_achievements(p_user_id uuid)
@@ -755,6 +809,20 @@ drop trigger if exists reading_logs_progress_refresh on public.reading_logs;
 create trigger reading_logs_progress_refresh
 after insert or update or delete on public.reading_logs
 for each row execute function public.on_progress_record_changed();
+
+-- Backfill milestone badges from progress already stored before this migration.
+do $backfill$
+declare r record;
+begin
+  for r in
+    select user_id from public.habit_completions
+    union
+    select user_id from public.reading_logs
+  loop
+    perform public.refresh_user_achievements(r.user_id);
+  end loop;
+end;
+$backfill$;
 
 create or replace function public.get_my_progress()
 returns table(
