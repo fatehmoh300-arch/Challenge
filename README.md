@@ -10,17 +10,18 @@
 
 شغّل ملفات `supabase/migrations` بالترتيب التصاعدي:
 
-1. `202611270001_challenge_schema.sql`
-2. `202611270002_hardening_and_scoring.sql`
-3. `202611270003_advisor_hardening.sql`
-4. `202611270004_public_challenge_catalog.sql`
-5. `202611270005_public_challenge_policy_tuning.sql`
-6. `202611270006_challenge_creation_and_open_join.sql`
-7. `20261127070000_flexible_challenges_progression.sql`
-8. `20261127080000_advisor_indexes_and_policy_cleanup.sql`
-9. `20261127090000_fix_progress_rpc_output_ambiguity.sql`
+1. `20261127034306_challenge_schema.sql`
+2. `20261127034323_hardening_and_scoring.sql`
+3. `20261127034417_advisor_hardening.sql`
+4. `20261127051952_public_challenge_catalog.sql`
+5. `20261127052044_public_challenge_policy_tuning.sql`
+6. `20261127052243_challenge_creation_and_open_join.sql`
+7. `20261127105043_flexible_challenges_progression.sql`
+8. `20261127105319_fix_progress_rpc_output_ambiguity.sql`
+9. `20261127105346_advisor_indexes_and_policy_cleanup.sql`
+10. `20261127142000_p0_security_scoring_integrity.sql`
 
-إذا كانت الترحيلات 001–006 مطبّقة على قاعدة مستخدمة، شغّل 007 ثم 008 فقط. لا تعِد تشغيل الترحيلات السابقة على قاعدة مستخدمة. وقد طُبّقت الترحيلات 007 و008 و009 بالفعل على مشروع Supabase المرتبط. يضيف 009 تصحيحاً لاستعلامات التقدّم والترتيب التي اختُبرت مباشرة بعد التنفيذ.
+أُعيدت تسمية ملفات الترحيلات المحلية لتطابق أرقام الإصدارات المسجلة فعلياً في Supabase؛ لم يُعَد تنفيذ أي ترحيل قديم. على قاعدة الإنتاج الحالية، يجب أن يكون سجلّ الإصدارات 001–009 موجوداً مسبقاً. نفّذ فقط الترحيل 010 بعد مراجعة تغييره ونتائج CI، ولا تعِد تطبيق أي ترحيل سابق.
 
 في Supabase Authentication → URL Configuration، اضبط Site URL وأضف عنوان الموقع المحلي وعنوان Vercel إلى Redirect URLs مع المسار `/auth/callback`.
 
