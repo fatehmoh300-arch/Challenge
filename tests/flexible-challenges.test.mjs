@@ -94,3 +94,14 @@ test("legacy comment insert policy compares the actual post and comment challeng
   assert.match(migration, /post_row\.challenge_id = challenge_comments\.challenge_id/);
   assert.doesNotMatch(migration, /post_row\.challenge_id\s*=\s*post_row\.challenge_id/);
 });
+
+
+test("membership, goal and join-request table writes are RPC-only", async () => {
+  const migration = await read("../supabase/migrations/20261127150633_p0_revoke_direct_membership_goal_request_writes.sql");
+  assert.match(migration, /REVOKE INSERT, UPDATE, DELETE\s+ON TABLE public\.challenge_members/);
+  assert.match(migration, /REVOKE INSERT, UPDATE, DELETE\s+ON TABLE public\.habits/);
+  assert.match(migration, /REVOKE INSERT\s+ON TABLE public\.challenge_join_requests/);
+  assert.match(migration, /status = 'pending'/);
+  assert.match(migration, /reviewed_by IS NULL/);
+  assert.match(migration, /reviewed_at IS NULL/);
+});
