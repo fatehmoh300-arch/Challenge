@@ -109,3 +109,11 @@ test("three-way tie at the third place remains a shared third place", () => {
   ]);
   assert.deepEqual(ranked.map((row) => row.competition_rank), [1, 2, 3, 3, 3]);
 });
+
+
+test("point totals never fall back to completion row counts without goal definitions", () => {
+  assert.equal(pointsFromCompletions([
+    { habit_id: "a", points_awarded: 7 },
+    { habit_id: "b", points_awarded: 0 },
+  ], []), 7);
+});
