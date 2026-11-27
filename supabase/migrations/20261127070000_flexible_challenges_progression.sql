@@ -1,8 +1,24 @@
 -- Flexible challenges, multi-challenge membership, custom goals, progression and community.
 -- Apply after the public challenge foundation migrations (004-006).
 
--- Remove the old fixed-date creation entry point and its December defaults.
-drop function if exists public.create_challenge(text, date, date);
+-- Keep the legacy RPC compatible with the already deployed frontend, but remove
+-- its fixed December dates and pre-seeded habits. New clients use create_challenge_v2.
+create or replace function public.create_challenge(
+  p_title text default 'تحدٍّ جديد',
+  p_start_date date default current_date,
+  p_end_date date default (current_date + 29)
+)
+returns uuid
+language sql
+security definer
+set search_path = ''
+as $
+  select public.create_challenge_v2(
+    p_title, '', p_start_date, p_end_date, 'private', 'medium', 'عام', 'invite', 50
+  );
+$;
+revoke all on function public.create_challenge(text,date,date) from public,anon;
+grant execute on function public.create_challenge(text,date,date) to authenticated;
 
 alter table public.challenge_members
   add column if not exists permissions text[] not null default '{}';
@@ -37,6 +53,14 @@ begin
     execute format('alter table public.habits drop constraint %I', r.conname);
   end loop;
 end $$;
+
+alter table public.habit_completions
+  add column if not exists points_awarded smallint not null default 1;
+
+update public.habit_completions hc
+set points_awarded = h.points
+from public.habits h
+where h.id = hc.habit_id and h.challenge_id = hc.challenge_id;
 
 alter table public.habits
   add column if not exists points smallint not null default 1,
@@ -244,6 +268,18 @@ begin
   if p_max_members not between 2 and 500 then raise exception 'الحد الأقصى يجب أن يكون بين 2 و500'; end if;
   select count(*) into v_members from public.challenge_members where challenge_id=p_challenge_id;
   if p_max_members<v_members then raise exception 'الحد الأقصى أقل من عدد الأعضاء الحالي'; end if;
+  if exists (
+    select 1 from public.daily_logs d where d.challenge_id=p_challenge_id
+      and d.log_date not between p_start_date and p_end_date
+  ) or exists (
+    select 1 from public.habit_completions hc where hc.challenge_id=p_challenge_id
+      and hc.log_date not between p_start_date and p_end_date
+  ) or exists (
+    select 1 from public.reading_logs r where r.challenge_id=p_challenge_id
+      and r.log_date not between p_start_date and p_end_date
+  ) then
+    raise exception 'لا يمكن تغيير المدة لتستبعد سجلات إنجاز موجودة بالفعل';
+  end if;
 
   update public.challenges set
     title=pg_catalog.btrim(p_title),
@@ -278,10 +314,13 @@ begin
   select start_date,end_date into v_start,v_end from public.challenges where id=p_challenge_id;
   if v_start is null then raise exception 'التحدّي غير موجود'; end if;
   v_active_from:=greatest(v_start,(now() at time zone 'Africa/Algiers')::date);
+  if v_active_from>v_end then raise exception 'انتهت فترة التحدّي ولا يمكن إضافة أهداف جديدة'; end if;
   insert into public.habits(challenge_id,habit_key,name,description,sort_order,is_fasting,points,is_required,is_active,active_from,active_until)
-  select p_challenge_id,'goal_'||replace(gen_random_uuid()::text,'-',''),pg_catalog.btrim(p_name),
-    coalesce(pg_catalog.btrim(p_description),''),coalesce(max(sort_order),0)+1,false,p_points,p_is_required,true,v_active_from,null
-  from public.habits where challenge_id=p_challenge_id
+  values (
+    p_challenge_id,'goal_'||replace(gen_random_uuid()::text,'-',''),pg_catalog.btrim(p_name),
+    coalesce(pg_catalog.btrim(p_description),''),(select coalesce(max(sort_order),0)+1 from public.habits where challenge_id=p_challenge_id),
+    false,p_points,p_is_required,true,v_active_from,null
+  )
   returning id into v_id;
   return v_id;
 end;
@@ -307,7 +346,7 @@ begin
     points=p_points,is_required=p_is_required,
     is_active=p_is_active,
     active_from=case when p_is_active and not is_active then greatest(v_today,(select start_date from public.challenges where id=p_challenge_id)) else active_from end,
-    active_until=case when not p_is_active and is_active then v_today else null end
+    active_until=case when p_is_active then null when is_active then v_today else active_until end
   where id=p_goal_id and challenge_id=p_challenge_id;
   if not found then raise exception 'الهدف غير موجود في هذا التحدّي'; end if;
 end;
@@ -316,6 +355,36 @@ revoke all on function public.update_challenge_goal(uuid,uuid,text,text,integer,
 grant execute on function public.update_challenge_goal(uuid,uuid,text,text,integer,boolean,boolean) to authenticated;
 
 -- Role assignment and granular delegation stay on the server.
+-- Capture the configured point value at the moment a participant completes a goal.
+-- Later edits to goal weights do not rewrite already-earned competition points or XP.
+create or replace function public.validate_completion()
+returns trigger
+language plpgsql
+set search_path = ''
+as $
+declare
+  v_fasting boolean;
+  v_key text;
+  v_points smallint;
+begin
+  perform public.validate_user_day(new.challenge_id,new.user_id,new.log_date);
+  select h.is_fasting,h.habit_key,h.points
+    into v_fasting,v_key,v_points
+    from public.habits h
+   where h.id=new.habit_id and h.challenge_id=new.challenge_id;
+  if v_key is null then raise exception 'العادة غير مرتبطة بهذا التحدّي'; end if;
+  if v_fasting and extract(isodow from new.log_date) not in (1,4) then
+    raise exception 'هذا الهدف لا يمكن تسجيله إلا يوم الاثنين أو الخميس';
+  end if;
+  if v_key='chess' and new.quantity not between 1 and 2 then
+    raise exception 'عدد المباريات يجب أن يكون 1 أو 2';
+  end if;
+  if v_key<>'chess' then new.quantity:=1; end if;
+  new.points_awarded:=v_points;
+  return new;
+end;
+$;
+
 create or replace function public.get_challenge_members(p_challenge_id uuid)
 returns table(user_id uuid,display_name text,avatar_url text,role text,permissions text[],joined_at timestamptz)
 language plpgsql stable security definer
@@ -346,10 +415,10 @@ begin
     raise exception 'تعيين الأدوار والصلاحيات متاح لمالك التحدّي فقط';
   end if;
   if p_role not in ('moderator','assistant','member') then raise exception 'الدور غير صالح'; end if;
-  if coalesce(p_permissions,'{}') <@ array[
+  if not (coalesce(p_permissions, array[]::text[]) <@ array[
     'manage_members','manage_rules','manage_join_requests',
     'moderate_posts','publish_posts','view_analytics'
-  ]::text[] is false then raise exception 'تتضمن الصلاحيات قيمة غير معروفة'; end if;
+  ]::text[]) then raise exception 'تتضمن الصلاحيات قيمة غير معروفة'; end if;
   update public.challenge_members set role=p_role,permissions=coalesce(p_permissions,'{}')
   where challenge_id=p_challenge_id and user_id=p_user_id and user_id<>(select owner_user_id from public.challenges where id=p_challenge_id);
   if not found then raise exception 'المشارك غير موجود أو لا يمكن تعديل مالك التحدّي'; end if;
@@ -477,13 +546,6 @@ create policy challenge_posts_member_select on public.challenge_posts
 for select to authenticated using (public.is_challenge_member(challenge_id));
 create policy challenge_posts_member_insert on public.challenge_posts
 for insert to authenticated with check (author_id=(select auth.uid()) and public.is_challenge_member(challenge_id));
-create policy challenge_posts_author_or_moderator_update on public.challenge_posts
-for update to authenticated
-using (author_id=(select auth.uid()) or public.has_challenge_permission(challenge_id,'moderate_posts'))
-with check (
-  (author_id=(select auth.uid()) or public.has_challenge_permission(challenge_id,'moderate_posts'))
-  and public.is_challenge_member(challenge_id)
-);
 create policy challenge_posts_author_or_moderator_delete on public.challenge_posts
 for delete to authenticated using (author_id=(select auth.uid()) or public.has_challenge_permission(challenge_id,'moderate_posts'));
 
@@ -496,13 +558,6 @@ create policy challenge_comments_member_insert on public.challenge_comments
 for insert to authenticated with check (
   author_id=(select auth.uid()) and public.is_challenge_member(challenge_id)
   and exists(select 1 from public.challenge_posts p where p.id=post_id and p.challenge_id=challenge_id)
-);
-create policy challenge_comments_author_or_moderator_update on public.challenge_comments
-for update to authenticated
-using (author_id=(select auth.uid()) or public.has_challenge_permission(challenge_id,'moderate_posts'))
-with check (
-  (author_id=(select auth.uid()) or public.has_challenge_permission(challenge_id,'moderate_posts'))
-  and public.is_challenge_member(challenge_id)
 );
 create policy challenge_comments_author_or_moderator_delete on public.challenge_comments
 for delete to authenticated using (author_id=(select auth.uid()) or public.has_challenge_permission(challenge_id,'moderate_posts'));
@@ -521,9 +576,9 @@ set search_path = ''
 as $$
 declare v_tasks integer; v_xp integer; v_pages integer; v_best_streak integer;
 begin
-  select count(*),coalesce(sum(h.points),0)::integer
+  select count(*),coalesce(sum(hc.points_awarded),0)::integer
     into v_tasks,v_xp
-  from public.habit_completions hc join public.habits h on h.id=hc.habit_id
+  from public.habit_completions hc
   where hc.user_id=p_user_id;
 
   select coalesce(sum(pages_read),0)::integer into v_pages
@@ -580,8 +635,8 @@ begin
   if v_uid is null then raise exception 'يجب تسجيل الدخول أولاً'; end if;
   return query
   with task_totals as (
-    select count(*)::integer tasks,coalesce(sum(h.points),0)::integer xp
-    from public.habit_completions hc join public.habits h on h.id=hc.habit_id
+    select count(*)::integer tasks,coalesce(sum(hc.points_awarded),0)::integer xp
+    from public.habit_completions hc
     where hc.user_id=v_uid
   ), reading_totals as (
     select coalesce(sum(pages_read),0)::integer pages from public.reading_logs where user_id=v_uid
@@ -627,7 +682,7 @@ begin
   ), member_days as (
     select cm.user_id,cal.day_date,
       coalesce(sum(h.points) filter(where h.id is not null),0)::integer expected_points,
-      coalesce(sum(h.points) filter(where hc.habit_id is not null),0)::integer day_points,
+      coalesce(sum(hc.points_awarded) filter(where hc.habit_id is not null),0)::integer day_points,
       count(h.id) filter(where h.is_required)::integer required_total,
       count(hc.habit_id) filter(where h.is_required)::integer required_done
     from public.challenge_members cm
@@ -689,7 +744,8 @@ where c.title = 'تحدّي ديسمبر 2026'
   and not exists (select 1 from public.challenge_posts p where p.challenge_id=c.id);
 
 -- Explicit Data API grants are required for newly-created public tables.
-grant select,insert,update,delete on public.challenge_posts,public.challenge_comments to authenticated;
+grant select,insert,delete on public.challenge_posts,public.challenge_comments to authenticated;
+revoke update on public.challenge_posts,public.challenge_comments from authenticated;
 grant select,insert on public.challenge_join_requests to authenticated;
 grant select on public.user_achievements to authenticated;
 
