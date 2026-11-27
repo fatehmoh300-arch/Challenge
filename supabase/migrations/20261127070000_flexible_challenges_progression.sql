@@ -57,17 +57,17 @@ end $$;
 alter table public.habit_completions
   add column if not exists points_awarded smallint not null default 1;
 
-update public.habit_completions hc
-set points_awarded = h.points
-from public.habits h
-where h.id = hc.habit_id and h.challenge_id = hc.challenge_id;
-
 alter table public.habits
   add column if not exists points smallint not null default 1,
   add column if not exists is_required boolean not null default true,
   add column if not exists is_active boolean not null default true,
   add column if not exists active_from date,
   add column if not exists active_until date;
+
+update public.habit_completions hc
+set points_awarded = h.points
+from public.habits h
+where h.id = hc.habit_id and h.challenge_id = hc.challenge_id;
 
 update public.habits h
 set active_from = c.start_date,
@@ -380,7 +380,11 @@ begin
     raise exception 'عدد المباريات يجب أن يكون 1 أو 2';
   end if;
   if v_key<>'chess' then new.quantity:=1; end if;
-  new.points_awarded:=v_points;
+  if tg_op='INSERT' then
+    new.points_awarded:=v_points;
+  else
+    new.points_awarded:=old.points_awarded;
+  end if;
   return new;
 end;
 $;
