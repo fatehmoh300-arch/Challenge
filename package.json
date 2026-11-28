@@ -2,12 +2,17 @@
   "name": "challenge-platform",
   "version": "1.0.0",
   "private": true,
+  "engines": {
+    "node": ">=22.0.0 <23.0.0"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
-    "test:rules": "node --test tests/*.test.mjs"
+    "test:rules": "node --test tests/*.test.mjs",
+    "doctor": "node scripts/doctor.mjs",
+    "check": "npm run doctor && npm run test:rules && npm run typecheck"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.7",

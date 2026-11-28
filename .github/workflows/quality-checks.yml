@@ -2,11 +2,13 @@ name: Challenge quality checks
 
 on:
   pull_request:
-    branches: [main]
+    branches:
+      - main
   push:
     branches:
       - main
       - feature/challenge-platform-v1
+      - chore/professional-workspace-setup
   workflow_dispatch:
 
 permissions:
@@ -19,7 +21,7 @@ concurrency:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
@@ -31,6 +33,12 @@ jobs:
 
       - name: Install dependencies
         run: npm install --no-audit --no-fund
+
+      - name: Check workspace configuration
+        run: npm run doctor
+
+      - name: Audit dependencies
+        run: npm audit --audit-level=high
 
       - name: Test business rules
         run: npm run test:rules
