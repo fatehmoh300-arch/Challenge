@@ -1,26 +1,54 @@
-/** Return true only for Monday (ISO day 1) or Thursday (ISO day 4) in a date-only value. */
+/** Date-only values are interpreted in UTC at midday to avoid timezone drift. */
 export function isFastingDate(value) {
   const day = new Date(`${value}T12:00:00Z`).getUTCDay();
   return day === 1 || day === 4;
 }
 
-/** Five fixed habits plus the fasting point on eligible weekdays. */
-export function maxPointsForDate(value) {
-  return 5 + (isFastingDate(value) ? 1 : 0);
+function isGoalActiveOnDate(goal, value) {
+  if (goal.is_active === false) return false;
+  if (goal.active_from && value < goal.active_from) return false;
+  if (goal.active_until && value > goal.active_until) return false;
+  if (goal.is_fasting && !isFastingDate(value)) return false;
+  return true;
 }
 
-/** Count persisted completion rows; the database enforces uniqueness per habit/day. */
-export function pointsFromCompletions(completions) {
-  return Array.isArray(completions) ? completions.length : 0;
+/** Maximum available points come from the challenge's own active goals. */
+export function maxPointsForDate(value, goals = []) {
+  return goals
+    .filter((goal) => isGoalActiveOnDate(goal, value))
+    .reduce((total, goal) => total + Number(goal.points || 0), 0);
 }
 
-/** Calculate the maximum number of monthly points for a date range. */
-export function maximumPointsForRange(start, end) {
+/** Sum the frozen point awards for completion rows using the goal catalogue. */
+export function pointsFromCompletions(completions = [], goals = []) {
+  if (!Array.isArray(completions)) return 0;
+  if (!Array.isArray(goals) || goals.length === 0) return completions.length;
+  const byId = new Map(goals.map((goal) => [goal.id, Number(goal.points || 0)]));
+  return completions.reduce((total, completion) => {
+    const points = Number.isFinite(completion.points_awarded)
+      ? Number(completion.points_awarded)
+      : byId.get(completion.habit_id) || 0;
+    return total + points;
+  }, 0);
+}
+
+/** A full day requires every configured required goal active on that date. */
+export function isFullDay(completions = [], goals = [], value) {
+  const required = goals.filter(
+    (goal) => goal.is_required && isGoalActiveOnDate(goal, value),
+  );
+  if (required.length === 0) return false;
+  const completedIds = new Set(completions.map((row) => row.habit_id));
+  return required.every((goal) => completedIds.has(goal.id));
+}
+
+/** Sum the possible points from the selected challenge's goal definitions. */
+export function maximumPointsForRange(start, end, goals = []) {
   const cursor = new Date(`${start}T12:00:00Z`);
   const last = new Date(`${end}T12:00:00Z`);
   let total = 0;
   while (cursor <= last) {
-    total += maxPointsForDate(cursor.toISOString().slice(0, 10));
+    total += maxPointsForDate(cursor.toISOString().slice(0, 10), goals);
     cursor.setUTCDate(cursor.getUTCDate() + 1);
   }
   return total;

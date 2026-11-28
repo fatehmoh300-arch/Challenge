@@ -54,7 +54,7 @@ export function useLeaderboard(
           "Notification" in window &&
           Notification.permission === "granted"
         ) {
-          new Notification("تغيّر ترتيبك في تحدّي ديسمبر", {
+          new Notification("تغيّر ترتيبك في التحدّي", {
             body: `انتقلت من المركز ${oldRank} إلى المركز ${nextRank}. افتح لوحة المنافسة للاطلاع على النتائج.`,
             icon: "/icon.svg",
           });
